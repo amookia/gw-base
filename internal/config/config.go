@@ -79,6 +79,10 @@ type Auth struct {
 	Type     string `yaml:"type"` // basic
 	Username Secret `yaml:"username"`
 	Password Secret `yaml:"password"`
+
+	Script       string            `yaml:"script,omitempty"` // path or inline Lua
+	ScriptIsFile bool              `yaml:"script_is_file,omitempty"`
+	Cache        map[string]string `yaml:"cache,omitempty"` // optional initial cache
 }
 
 type Secret struct {

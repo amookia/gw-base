@@ -77,26 +77,26 @@ func (h *handler) serve(c *gin.Context) {
 	fields, err := h.buildFields(params)
 	if err != nil {
 		h.log.Error("building upstream body failed", "error", err)
-		fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "internal error")
+		fail(c, http.StatusInternalServerError, INTERNAL_ERROR, "internal error")
 		return
 	}
 
 	raw, status, err := h.up.Call(c.Request.Context(), fields)
 	if err != nil {
 		h.log.Error("upstream call failed", "error", err)
-		fail(c, http.StatusBadGateway, "UPSTREAM_ERROR", "upstream call failed")
+		fail(c, http.StatusBadGateway, UPSTREAM_ERROR, "upstream call failed")
 		return
 	}
 	if status < 200 || status > 299 {
 		h.log.Error("upstream returned error status", "status", status)
-		fail(c, http.StatusBadGateway, "UPSTREAM_ERROR", fmt.Sprintf("upstream returned status %d", status))
+		fail(c, http.StatusBadGateway, UPSTREAM_ERROR, fmt.Sprintf("upstream returned status %d", status))
 		return
 	}
 
 	doc, err := decodeJSON(raw)
 	if err != nil {
 		h.log.Error("upstream returned invalid JSON", "error", err)
-		fail(c, http.StatusBadGateway, "UPSTREAM_ERROR", "invalid upstream response")
+		fail(c, http.StatusBadGateway, UPSTREAM_ERROR, "invalid upstream response")
 		return
 	}
 

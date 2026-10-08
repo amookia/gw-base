@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	auth2 "gw-base/internal/upstream/auth"
 	"io"
 	"log/slog"
 	"net/http"
@@ -20,7 +21,7 @@ type Upstream struct {
 	method string
 	url    string
 	format string // json | form
-	auth   Authenticator
+	auth   auth2.Authenticator
 	logger *slog.Logger
 	client *http.Client
 }
@@ -30,7 +31,7 @@ func New(method string, cfg config.Upstream, logger *slog.Logger) (*Upstream, er
 	if err != nil {
 		return nil, err
 	}
-	auth, err := NewAuthenticator(cfg.Auth)
+	auth, err := auth2.NewAuthenticator(cfg.Auth)
 	if err != nil {
 		return nil, err
 	}

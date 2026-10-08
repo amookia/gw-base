@@ -45,10 +45,12 @@ endpoints:
       timeout: 10s
       format: json                              # body encoding: json | form (default: json)
       auth:
-        type: basic
-        username: { source: env, value: INQUIRY_USERNAME }
-        password: { source: env, value: INQUIRY_PASSWORD }
-
+        #type: basic
+        #username: { source: env, value: INQUIRY_USERNAME }
+        #password: { source: env, value: INQUIRY_PASSWORD }
+        type: custom
+        script: custom.lua
+        script_is_file: true
       path: /astannix/GetEstelam3
       body:
         arg0: "meas"      # fixed values from env (not client-controllable)
@@ -57,7 +59,7 @@ endpoints:
         arg3: "D3F543F4F6E3"
         nin: "{{nationalCode}}"
         birthDate: "{{birthDate}}"
-        xx: [ x1: x2 ]
+        #xx: [ x1: x2 ]
 
 
     response:
