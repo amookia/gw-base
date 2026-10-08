@@ -1,0 +1,83 @@
+package engine
+
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+var placeholder = regexp.MustCompile(`\{\{\s*(.+?)\s*\}\}`)
+
+// placeholders lists the keys used in a template, e.g. {{ a }} {{b}} -> [a b].
+func placeholders(tpl string) []string {
+	var keys []string
+	for _, m := range placeholder.FindAllStringSubmatch(tpl, -1) {
+		keys = append(keys, m[1])
+	}
+	return keys
+}
+
+// render replaces every {{ key }} in tpl with lookup(key).
+func render(tpl string, lookup func(key string) (string, bool)) (string, error) {
+	var missing string
+	out := placeholder.ReplaceAllStringFunc(tpl, func(m string) string {
+		key := placeholder.FindStringSubmatch(m)[1]
+		v, ok := lookup(key)
+		if !ok && missing == "" {
+			missing = key
+		}
+		return v
+	})
+	if missing != "" {
+		return "", fmt.Errorf("unresolved placeholder %q", missing)
+	}
+	return out, nil
+}
+
+// lookupPath resolves a minimal JSONPath ($.a.b, $.items[0].id) against a decoded JSON document.
+func lookupPath(doc any, path string) (any, bool) {
+	rest, ok := strings.CutPrefix(path, "$.")
+	if !ok {
+		return nil, false
+	}
+	cur := doc
+	for _, seg := range strings.Split(rest, ".") {
+		name, idx, indexed := seg, 0, false
+		if i := strings.IndexByte(seg, '['); i >= 0 && strings.HasSuffix(seg, "]") {
+			n, err := strconv.Atoi(seg[i+1 : len(seg)-1])
+			if err != nil {
+				return nil, false
+			}
+			name, idx, indexed = seg[:i], n, true
+		}
+
+		obj, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if cur, ok = obj[name]; !ok {
+			return nil, false
+		}
+		if indexed {
+			arr, ok := cur.([]any)
+			if !ok || idx < 0 || idx >= len(arr) {
+				return nil, false
+			}
+			cur = arr[idx]
+		}
+	}
+	return cur, true
+}
+
+// stringify renders a decoded JSON scalar for comparisons and messages.
+func stringify(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return t
+	default:
+		return fmt.Sprint(t)
+	}
+}

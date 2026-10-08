@@ -1,0 +1,12 @@
+{"time":"2026-10-08T23:18:09.105938913+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-estelam3","method":"POST","path":"/v1/inquiry"}
+{"time":"2026-10-08T23:18:09.109863686+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-08T23:18:15.702133964+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-08T23:18:46.724101997+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-estelam3","method":"POST","path":"/v1/inquiry"}
+{"time":"2026-10-08T23:18:46.729561634+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-08T23:19:15.044295807+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-08T23:19:50.076145886+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-estelam3","method":"POST","path":"/v1/inquiry"}
+{"time":"2026-10-08T23:19:50.083844716+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-08T23:20:11.324855909+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/inquiry","status":400,"duration_ms":0}
+{"time":"2026-10-08T23:21:33.705039693+03:30","level":"ERROR","msg":"upstream call failed","service":"person-inquiry","version":"1.0.0","endpoint":"get-estelam3","error":"calling upstream: Post \"http://127.0.0.1:8787/astannix/GetEstelam3\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"}
+{"time":"2026-10-08T23:21:33.70722286+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/inquiry","status":502,"duration_ms":10004}
+{"time":"2026-10-08T23:22:05.559607703+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
