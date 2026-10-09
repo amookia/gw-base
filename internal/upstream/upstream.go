@@ -50,14 +50,21 @@ func New(method string, cfg config.Upstream, logger *slog.Logger) (*Upstream, er
 }
 
 // encode serializes fields as a JSON object or a urlencoded form, per upstream.format.
-func (u *Upstream) encode(fields map[string]string) (body []byte, contentType string, err error) {
+func (u *Upstream) encode(fields map[string]any) (body []byte, contentType string, err error) {
 	if len(fields) == 0 {
 		return nil, "", nil
 	}
 	if u.format == "form" {
 		form := make(url.Values, len(fields))
 		for k, v := range fields {
-			form.Set(k, v)
+			switch t := v.(type) {
+			case nil:
+				form.Set(k, "")
+			case map[string]any, []any:
+				return nil, "", fmt.Errorf("field %q: form bodies cannot be nested", k)
+			default:
+				form.Set(k, fmt.Sprint(t))
+			}
 		}
 		return []byte(form.Encode()), "application/x-www-form-urlencoded", nil
 	}
@@ -66,7 +73,7 @@ func (u *Upstream) encode(fields map[string]string) (body []byte, contentType st
 }
 
 // Call sends fields (may be empty) and returns the response body and status code.
-func (u *Upstream) Call(ctx context.Context, fields map[string]string) ([]byte, int, error) {
+func (u *Upstream) Call(ctx context.Context, fields map[string]any) ([]byte, int, error) {
 	body, contentType, err := u.encode(fields)
 	if err != nil {
 		return nil, 0, fmt.Errorf("encoding body: %w", err)

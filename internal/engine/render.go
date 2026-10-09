@@ -81,3 +81,32 @@ func stringify(v any) string {
 		return fmt.Sprint(t)
 	}
 }
+
+func mapStrings(v any, fn func(string) (string, error)) (any, error) {
+	switch t := v.(type) {
+	case string:
+		return fn(t)
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			r, err := mapStrings(e, fn)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = r
+		}
+		return out, nil
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, e := range t {
+			r, err := mapStrings(e, fn)
+			if err != nil {
+				return nil, err
+			}
+			out[k] = r
+		}
+		return out, nil
+	default:
+		return v, nil
+	}
+}

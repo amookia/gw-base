@@ -53,15 +53,21 @@ func checkTemplates(ep config.Endpoint) error {
 	for _, p := range ep.Params {
 		declared[p.Name] = true
 	}
-	for field, tpl := range ep.Upstream.Body {
-		for _, key := range placeholders(tpl) {
-			if name, ok := strings.CutPrefix(key, envPrefix); ok {
-				if _, set := os.LookupEnv(name); !set {
-					return fmt.Errorf("upstream.body.%s: env var %q is not set", field, name)
+	for field, v := range ep.Upstream.Body {
+		_, err := mapStrings(v, func(s string) (string, error) {
+			for _, key := range placeholders(s) {
+				if name, ok := strings.CutPrefix(key, envPrefix); ok {
+					if _, set := os.LookupEnv(name); !set {
+						return "", fmt.Errorf("env var %q is not set", name)
+					}
+				} else if !declared[key] {
+					return "", fmt.Errorf("unknown param %q", key)
 				}
-			} else if !declared[key] {
-				return fmt.Errorf("upstream.body.%s: unknown param %q", field, key)
 			}
+			return s, nil
+		})
+		if err != nil {
+			return fmt.Errorf("upstream.body.%s: %w", field, err)
 		}
 	}
 	return nil
@@ -165,7 +171,7 @@ func (h *handler) collectParams(c *gin.Context) (map[string]string, error) {
 }
 
 // buildFields renders upstream.body templates; nil means "send no body".
-func (h *handler) buildFields(params map[string]string) (map[string]string, error) {
+func (h *handler) buildFields(params map[string]string) (map[string]any, error) {
 	if len(h.ep.Upstream.Body) == 0 {
 		return nil, nil
 	}
@@ -176,9 +182,9 @@ func (h *handler) buildFields(params map[string]string) (map[string]string, erro
 		return params[key], true // optional params that were not sent render empty
 	}
 
-	fields := make(map[string]string, len(h.ep.Upstream.Body))
+	fields := make(map[string]any, len(h.ep.Upstream.Body))
 	for name, tpl := range h.ep.Upstream.Body {
-		v, err := render(tpl, lookup)
+		v, err := mapStrings(tpl, func(s string) (string, error) { return render(s, lookup) })
 		if err != nil {
 			return nil, fmt.Errorf("upstream.body.%s: %w", name, err)
 		}

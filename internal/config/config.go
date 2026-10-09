@@ -66,13 +66,13 @@ type Param struct {
 }
 
 type Upstream struct {
-	BaseURL    string            `yaml:"base_url"`
-	BaseURLEnv string            `yaml:"base_url_env"`
-	Timeout    time.Duration     `yaml:"timeout"`
-	Format     string            `yaml:"format"` // body encoding: json (default) | form
-	Auth       *Auth             `yaml:"auth"`
-	Path       string            `yaml:"path"`
-	Body       map[string]string `yaml:"body"` // values may contain {{param}} and {{env.NAME}} templates
+	BaseURL    string         `yaml:"base_url"`
+	BaseURLEnv string         `yaml:"base_url_env"`
+	Timeout    time.Duration  `yaml:"timeout"`
+	Format     string         `yaml:"format"` // body encoding: json (default) | form
+	Auth       *Auth          `yaml:"auth"`
+	Path       string         `yaml:"path"`
+	Body       map[string]any `yaml:"body"` // nested objects/lists allowed; strings may contain {{param}} and {{env.NAME}}
 }
 
 type Auth struct {
