@@ -10,7 +10,7 @@ import (
 
 	"gw-base/internal/config"
 	"gw-base/internal/engine"
-	"gw-base/internal/logging"
+	"gw-base/pkg/logging"
 )
 
 func main() {
@@ -29,10 +29,11 @@ func run() error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	logger, err := logging.New(cfg.Logging, cfg.Service)
+	logger, err := logging.New(loggerOptions(cfg.Logging))
 	if err != nil {
-		return err
+		return fmt.Errorf("creating logger: %w", err)
 	}
+	logger = logger.With("service", cfg.Service.Name, "version", cfg.Service.Version)
 
 	eng, err := engine.New(cfg, logger)
 	if err != nil {
@@ -43,4 +44,23 @@ func run() error {
 	defer stop()
 
 	return eng.Run(ctx)
+}
+
+// loggerOptions maps the YAML logging section onto pkg/logging, which stays
+// independent of the application's config.
+func loggerOptions(l config.Logging) logging.Options {
+	return logging.Options{
+		Backend:  l.Logger,
+		Level:    l.Level,
+		Encoding: l.Encoding,
+		Console:  l.Console,
+		File: logging.File{
+			Dir:        l.FilePath,
+			Name:       l.FileName,
+			MaxSizeMB:  l.Rotating.MaxSize,
+			MaxBackups: l.Rotating.MaxBackups,
+			MaxAgeDays: l.Rotating.MaxAge,
+			Compress:   l.Rotating.Compress,
+		},
+	}
 }
