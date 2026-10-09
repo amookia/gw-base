@@ -76,10 +76,9 @@ type Upstream struct {
 }
 
 type Auth struct {
-	Type     string `yaml:"type"` // basic
-	Username Secret `yaml:"username"`
-	Password Secret `yaml:"password"`
-
+	Type         string            `yaml:"type"` // basic
+	Username     Secret            `yaml:"username"`
+	Password     Secret            `yaml:"password"`
 	Script       string            `yaml:"script,omitempty"` // path or inline Lua
 	ScriptIsFile bool              `yaml:"script_is_file,omitempty"`
 	Cache        map[string]string `yaml:"cache,omitempty"` // optional initial cache
@@ -90,16 +89,21 @@ type Secret struct {
 	Value  string `yaml:"value"`  // env var name
 }
 
+// BusinessError turns an upstream answer into an error for the client.
+// It is checked on every JSON answer, whatever the upstream's HTTP status.
 type BusinessError struct {
 	When    When   `yaml:"when"`
-	Status  int    `yaml:"status"`
-	Code    string `yaml:"code"`
+	Status  int    `yaml:"status"`  // client-facing HTTP status (4xx/5xx, default 422)
+	Code    string `yaml:"code"`    // client-facing error code
 	Message string `yaml:"message"` // may contain {{ $.json.path }} templates
 }
 
+// When matches on one value of the upstream JSON. Set exactly one of
+// Equals / NotEquals; a path that is missing from the answer never matches.
 type When struct {
-	Path   string `yaml:"path"`
-	Equals string `yaml:"equals"`
+	Path      string  `yaml:"path"`
+	Equals    *string `yaml:"equals"`
+	NotEquals *string `yaml:"not_equals"`
 }
 
 type Response struct {

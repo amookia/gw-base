@@ -112,6 +112,9 @@ func (e *Endpoint) normalize() error {
 	default:
 		return fmt.Errorf("upstream.format must be json or form, got %q", e.Upstream.Format)
 	}
+	if err := checkBody(e.Upstream.Body, e.Upstream.Format == "form"); err != nil {
+		return fmt.Errorf("upstream.body.%w", err)
+	}
 	if e.Upstream.Timeout == 0 {
 		e.Upstream.Timeout = 10 * time.Second
 	}
@@ -126,16 +129,28 @@ func (e *Endpoint) normalize() error {
 	}
 
 	for i := range e.BusinessErrors {
-		be := &e.BusinessErrors[i]
-		if !strings.HasPrefix(be.When.Path, "$.") {
-			return fmt.Errorf("business_errors[%d]: when.path %q must start with $.", i, be.When.Path)
+		if err := e.BusinessErrors[i].normalize(); err != nil {
+			return fmt.Errorf("business_errors[%d]: %w", i, err)
 		}
-		if be.Code == "" {
-			return fmt.Errorf("business_errors[%d]: code is required", i)
-		}
-		if be.Status == 0 {
-			be.Status = http.StatusUnprocessableEntity
-		}
+	}
+	return nil
+}
+
+func (be *BusinessError) normalize() error {
+	if !strings.HasPrefix(be.When.Path, "$.") {
+		return fmt.Errorf("when.path %q must start with $.", be.When.Path)
+	}
+	if (be.When.Equals == nil) == (be.When.NotEquals == nil) {
+		return errors.New("set exactly one of when.equals / when.not_equals")
+	}
+	if be.Code == "" {
+		return errors.New("code is required")
+	}
+	if be.Status == 0 {
+		be.Status = http.StatusUnprocessableEntity
+	}
+	if be.Status < 400 || be.Status > 599 {
+		return fmt.Errorf("status %d must be 4xx or 5xx", be.Status)
 	}
 	return nil
 }
@@ -152,4 +167,43 @@ func (u Upstream) URL() (string, error) {
 		return "", errors.New("upstream.base_url (or base_url_env) is required")
 	}
 	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(u.Path, "/"), nil
+}
+
+// checkBody accepts strings, numbers, bools, null, lists and objects; form bodies must be flat.
+func checkBody(fields map[string]any, flat bool) error {
+	for name, v := range fields {
+		if flat {
+			switch v.(type) {
+			case map[string]any, []any:
+				return fmt.Errorf("%s: nested values need format: json", name)
+			}
+		}
+		if err := checkValue(v); err != nil {
+			return fmt.Errorf("%s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+func checkValue(v any) error {
+	switch t := v.(type) {
+	case nil, string, bool, int, int64, uint64, float64:
+		return nil
+	case []any:
+		for i, e := range t {
+			if err := checkValue(e); err != nil {
+				return fmt.Errorf("[%d]: %w", i, err)
+			}
+		}
+		return nil
+	case map[string]any:
+		for k, e := range t {
+			if err := checkValue(e); err != nil {
+				return fmt.Errorf("%s: %w", k, err)
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported value of type %T (object keys must be strings)", v)
+	}
 }

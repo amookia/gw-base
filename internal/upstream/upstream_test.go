@@ -14,7 +14,7 @@ import (
 )
 
 func TestCallFormats(t *testing.T) {
-	fields := map[string]string{"nin": "0012345678", "name": "a b&c"}
+	fields := map[string]any{"nin": "0012345678", "name": "a b&c"}
 
 	for _, tc := range []struct {
 		format, contentType string

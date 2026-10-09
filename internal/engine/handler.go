@@ -34,6 +34,9 @@ func newHandler(ep config.Endpoint, maxBody int64, logger *slog.Logger) (*handle
 	if err := checkTemplates(ep); err != nil {
 		return nil, err
 	}
+	if err := checkMessages(ep); err != nil {
+		return nil, err
+	}
 	up, err := upstream.New(ep.Method, ep.Upstream, logger)
 	if err != nil {
 		return nil, err
@@ -73,6 +76,18 @@ func checkTemplates(ep config.Endpoint) error {
 	return nil
 }
 
+// checkMessages makes sure business error messages only use {{ $.json.paths }}.
+func checkMessages(ep config.Endpoint) error {
+	for i, be := range ep.BusinessErrors {
+		for _, key := range placeholders(be.Message) {
+			if !strings.HasPrefix(key, "$.") {
+				return fmt.Errorf("business_errors[%d]: message placeholder %q must be a $.json.path", i, key)
+			}
+		}
+	}
+	return nil
+}
+
 func (h *handler) serve(c *gin.Context) {
 	params, err := h.collectParams(c)
 	if err != nil {
@@ -83,35 +98,41 @@ func (h *handler) serve(c *gin.Context) {
 	fields, err := h.buildFields(params)
 	if err != nil {
 		h.log.Error("building upstream body failed", "error", err)
-		fail(c, http.StatusInternalServerError, INTERNAL_ERROR, "internal error")
+		fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "internal error")
 		return
 	}
 
 	raw, status, err := h.up.Call(c.Request.Context(), fields)
 	if err != nil {
 		h.log.Error("upstream call failed", "error", err)
-		fail(c, http.StatusBadGateway, UPSTREAM_ERROR, "upstream call failed")
+		fail(c, http.StatusBadGateway, "UPSTREAM_ERROR", "upstream call failed")
 		return
 	}
+
+	doc, jsonErr := decodeJSON(raw)
+
+	// Business errors win over transport-level checks: an upstream may report
+	// its error in the body of a 200 as well as in the body of a 500.
+	if jsonErr == nil {
+		if be := h.matchBusinessError(doc); be != nil {
+			msg, _ := render(be.Message, func(key string) (string, bool) {
+				v, _ := lookupPath(doc, key)
+				return stringify(v), true // a missing path renders empty
+			})
+			h.log.Warn("upstream business error", "upstream_status", status, "code", be.Code)
+			fail(c, be.Status, be.Code, msg)
+			return
+		}
+	}
+
 	if status < 200 || status > 299 {
 		h.log.Error("upstream returned error status", "status", status)
-		fail(c, http.StatusBadGateway, UPSTREAM_ERROR, fmt.Sprintf("upstream returned status %d", status))
+		fail(c, http.StatusBadGateway, "UPSTREAM_ERROR", fmt.Sprintf("upstream returned status %d", status))
 		return
 	}
-
-	doc, err := decodeJSON(raw)
-	if err != nil {
-		h.log.Error("upstream returned invalid JSON", "error", err)
-		fail(c, http.StatusBadGateway, UPSTREAM_ERROR, "invalid upstream response")
-		return
-	}
-
-	if be := h.matchBusinessError(doc); be != nil {
-		msg, _ := render(be.Message, func(key string) (string, bool) {
-			v, _ := lookupPath(doc, key)
-			return stringify(v), true // a missing path renders empty
-		})
-		fail(c, be.Status, be.Code, msg)
+	if jsonErr != nil {
+		h.log.Error("upstream returned invalid JSON", "error", jsonErr)
+		fail(c, http.StatusBadGateway, "UPSTREAM_ERROR", "invalid upstream response")
 		return
 	}
 
@@ -121,7 +142,7 @@ func (h *handler) serve(c *gin.Context) {
 		fail(c, http.StatusBadGateway, "UPSTREAM_ERROR", "invalid upstream response")
 		return
 	}
-	c.JSON(h.ep.Response.Status, out)
+	succeed(c, h.ep.Response.Status, out)
 }
 
 // collectParams reads every declared param from its location and validates it.
@@ -193,10 +214,17 @@ func (h *handler) buildFields(params map[string]string) (map[string]any, error) 
 	return fields, nil
 }
 
+// matchBusinessError returns the first business error whose condition holds.
 func (h *handler) matchBusinessError(doc any) *config.BusinessError {
 	for i := range h.ep.BusinessErrors {
 		be := &h.ep.BusinessErrors[i]
-		if v, ok := lookupPath(doc, be.When.Path); ok && stringify(v) == be.When.Equals {
+		v, ok := lookupPath(doc, be.When.Path)
+		if !ok {
+			continue // a missing value never matches
+		}
+		got := stringify(v)
+		if (be.When.Equals != nil && got == *be.When.Equals) ||
+			(be.When.NotEquals != nil && got != *be.When.NotEquals) {
 			return be
 		}
 	}
@@ -245,8 +273,4 @@ func scalar(v any) (string, bool) {
 	default:
 		return "", false
 	}
-}
-
-func fail(c *gin.Context, status int, code, message string) {
-	c.JSON(status, gin.H{"code": code, "message": message})
 }

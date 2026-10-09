@@ -23,8 +23,17 @@ type Engine struct {
 func New(cfg *config.Config, logger *slog.Logger) (*Engine, error) {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(gin.Recovery(), accessLog(logger))
-	r.GET("/healthz", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+	r.HandleMethodNotAllowed = true
+	r.Use(gin.CustomRecovery(func(c *gin.Context, recovered any) {
+		logger.Error("panic recovered", "panic", recovered)
+		c.Abort()
+		fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "internal error")
+	}), accessLog(logger))
+	r.NoRoute(func(c *gin.Context) { fail(c, http.StatusNotFound, "NOT_FOUND", "route not found") })
+	r.NoMethod(func(c *gin.Context) {
+		fail(c, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+	})
+	r.GET("/healthz", func(c *gin.Context) { succeed(c, http.StatusOK, gin.H{"status": "ok"}) })
 
 	for _, ep := range cfg.Endpoints {
 		h, err := newHandler(ep, cfg.Server.MaxBodyBytes, logger)

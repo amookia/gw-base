@@ -7,8 +7,13 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"gw-base/internal/config"
 )
@@ -73,10 +78,18 @@ func TestInquirySuccess(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
 	}
 
-	var got map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+	var env struct {
+		IsSuccess bool           `json:"isSuccess"`
+		Result    map[string]any `json:"result"`
+		Error     any            `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatal(err)
 	}
+	if !env.IsSuccess || env.Error != nil {
+		t.Fatalf("not a success envelope: %s", rec.Body)
+	}
+	got := env.Result
 	if got["name"] != "علی" || got["family"] != "رضایی" || got["gender"] != "M" {
 		t.Fatalf("unexpected payload: %v", got)
 	}
@@ -132,6 +145,121 @@ func TestUpstreamFailure(t *testing.T) {
 	}
 }
 
+func TestNestedBodyTemplates(t *testing.T) {
+	t.Setenv("GW_TEST_SECRET", "s3")
+	ep := config.Endpoint{
+		Name:   "nested",
+		Method: http.MethodPost,
+		Params: []config.Param{{Name: "id", In: "body"}},
+		Upstream: config.Upstream{
+			BaseURL: "http://upstream.invalid", Path: "/p", Format: "json", Timeout: time.Second,
+			Body: map[string]any{
+				"xx":    map[string]any{"x1": "{{id}}"},
+				"items": []any{map[string]any{"id": "{{ id }}", "key": "{{env.GW_TEST_SECRET}}"}, "plain", 7},
+			},
+		},
+	}
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	h, err := newHandler(ep, 1<<20, quiet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields, err := h.buildFields(map[string]string{"id": "42"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := json.Marshal(fields)
+	want := `{"items":[{"id":"42","key":"s3"},"plain",7],"xx":{"x1":"42"}}`
+	if string(got) != want {
+		t.Errorf("body = %s, want %s", got, want)
+	}
+
+	ep.Upstream.Body = map[string]any{"a": []any{map[string]any{"b": "{{nope}}"}}}
+	if _, err := newHandler(ep, 1<<20, quiet); err == nil {
+		t.Error("unknown param inside a nested body should fail at startup")
+	}
+}
+
+const businessYAML = `
+schema_version: 1
+service: { name: svc }
+endpoints:
+  - name: biz
+    method: POST
+    path: /v1/biz
+    params:
+      - { name: id, in: body, required: true }
+    upstream:
+      base_url: UPSTREAM_URL
+      path: /p
+      body: { id: "{{id}}" }
+    response:
+      map: { value: "$.result.data.Result.Value" }
+    business_errors:
+      - when: { path: "$.result.data.Result.No", equals: "-1" }
+        status: 400
+        code: UPSTREAM_ERROR
+        message: "{{ $.result.data.Result.Message }}"
+      - when: { path: "$.result.data.Result.Level", not_equals: "ok" }
+        status: 500
+        code: BAD_LEVEL
+        message: "level is {{ $.result.data.Result.Level }}"
+`
+
+func TestBusinessErrors(t *testing.T) {
+	result := func(fields string) string { return `{"result":{"data":{"Result":{` + fields + `}}}}` }
+
+	for _, tc := range []struct {
+		name       string
+		upstream   int
+		body       string
+		wantStatus int
+		wantBody   string
+	}{
+		{"No equals -1 on a 200", 200, result(`"No":-1,"Message":"bad thing","Level":"ok"`),
+			400, `"code":"UPSTREAM_ERROR","message":"bad thing"`},
+		{"same error inside an HTTP 500", 500, result(`"No":-1,"Message":"bad thing","Level":"ok"`),
+			400, `"code":"UPSTREAM_ERROR","message":"bad thing"`},
+		{"plain HTTP 500 is still a 502", 500, `boom`,
+			502, `"message":"upstream returned status 500"`},
+		{"No not -1 passes through", 200, result(`"No":0,"Value":"v","Level":"ok"`),
+			200, `"value":"v"`},
+		{"not_equals fires on a different value", 200, result(`"No":0,"Level":"weird"`),
+			500, `"code":"BAD_LEVEL","message":"level is weird"`},
+		{"a missing path never matches", 200, result(`"No":0,"Value":"v"`),
+			200, `"value":"v"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tc.upstream)
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer srv.Close()
+
+			path := filepath.Join(t.TempDir(), "svc.yaml")
+			if err := os.WriteFile(path, []byte(strings.Replace(businessYAML, "UPSTREAM_URL", srv.URL, 1)), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := config.Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			eng, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/biz", strings.NewReader(`{"id":"7"}`))
+			rec := httptest.NewRecorder()
+			eng.router.ServeHTTP(rec, req)
+			if rec.Code != tc.wantStatus || !strings.Contains(rec.Body.String(), tc.wantBody) {
+				t.Errorf("got %d %s\nwant %d containing %s", rec.Code, rec.Body, tc.wantStatus, tc.wantBody)
+			}
+		})
+	}
+}
+
 func TestLookupPath(t *testing.T) {
 	doc, _ := decodeJSON([]byte(`{"a":{"b":[{"c":"x"},{"c":"y"}]},"n":12345678901234567890}`))
 
@@ -144,5 +272,37 @@ func TestLookupPath(t *testing.T) {
 		if _, ok := lookupPath(doc, path); ok {
 			t.Errorf("%s should not resolve", path)
 		}
+	}
+}
+
+func TestEnvelopeShape(t *testing.T) {
+	eng, _ := newTestEngine(t, 200, reply(""))
+	eng.router.GET("/boom", func(*gin.Context) { panic("kaboom") })
+
+	for name, tc := range map[string]struct {
+		method, path, body string
+		status             int
+		want               string
+	}{
+		"success": {http.MethodPost, "/v1/inquiry", `{"nationalCode":"0012345678","birthDate":"13800415"}`,
+			200, `{"isSuccess":true,"result":{`},
+		"validation error": {http.MethodPost, "/v1/inquiry", `{}`,
+			400, `{"isSuccess":false,"result":null,"error":{"code":"INVALID_REQUEST","message":"nationalCode is required"}}`},
+		"unknown route": {http.MethodGet, "/nope", ``,
+			404, `{"isSuccess":false,"result":null,"error":{"code":"NOT_FOUND","message":"route not found"}}`},
+		"wrong method": {http.MethodGet, "/v1/inquiry", ``,
+			405, `{"isSuccess":false,"result":null,"error":{"code":"METHOD_NOT_ALLOWED","message":"method not allowed"}}`},
+		"panic": {http.MethodGet, "/boom", ``,
+			500, `{"isSuccess":false,"result":null,"error":{"code":"INTERNAL_ERROR","message":"internal error"}}`},
+		"health": {http.MethodGet, "/healthz", ``,
+			200, `{"isSuccess":true,"result":{"status":"ok"},"error":null}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			eng.router.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body)))
+			if rec.Code != tc.status || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Errorf("got %d %s\nwant %d containing %s", rec.Code, rec.Body, tc.status, tc.want)
+			}
+		})
 	}
 }
