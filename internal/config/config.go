@@ -78,7 +78,7 @@ type Upstream struct {
 	BaseURL    string         `yaml:"base_url"`
 	BaseURLEnv string         `yaml:"base_url_env"`
 	Timeout    time.Duration  `yaml:"timeout"`
-	Format     string         `yaml:"format"` // body encoding: json (default) | form
+	Format     string         `yaml:"format"` // body encoding: json (default) | form (urlencoded) | multipart (form-data)
 	Auth       *Auth          `yaml:"auth"`
 	Path       string         `yaml:"path"`
 	Body       map[string]any `yaml:"body"` // nested objects/lists allowed; strings may contain {{param}} and {{env.NAME}}

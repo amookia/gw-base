@@ -2,11 +2,9 @@ schema_version: 1
 
 service:
   name: person-inquiry
-  provider: astan
+  provider: sitaad
   domain: test
   version: 1.0.0                  # default: 0.1.0
-  labels:                         # extra GLOBAL metric labels (optional)
-    team: core-banking
 
 mode: pure
 
@@ -32,32 +30,66 @@ logging:
     compress: true    # Compress old log files
 
 endpoints:
-  - name: get-legal-info
+  - name: inquiry2
     method: POST
-    path: /v1/astan/legal/inquiry
+    path: /v1/sitaad/person/inquiry    
     params:
-      - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{11}$' }
+      - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$' }
+      - { name: birthDate,   in: body, required: true,  pattern: '^[0-9]{8}$' }   # e.g. 13800415
     upstream:
-      auth:
-        type: basic
-        username: { source: env, value: INQUIRY_USERNAME }
-        password: { source: env, value: INQUIRY_PASSWORD }
-      base_url: http://inquiryps.fam724.ir     # NOTE: plain HTTP, credentials cross the network unencrypted
-      #base_url: http://127.0.0.1:8787
-      base_url_env: INQUIRY_BASE_URL            # optional override (staging / local mock)
-      timeout: 10s
-      path: /astannix/sabteasnad/GetLatestInfo
+      base_url: http://inquiryps.fam724.ir
+      path: /dispatch/{{birthDate}}
       body:
-        UserName: "MelalBank.Service"
-        PassWord: "48CD7C4BFA21DFE3E0630B2A010AAA58"
-        NationalCode: "{{nationalCode}}"
+        payload:
+          birthDate: "{{birthDate}}"
+          bookNo: ""
+          bookRow: ""
+          dateHasPostfix: ""
+          family: ""
+          familyHasPerfix: ""
+          familyHasPostfix: ""
+          fatherName: ""
+          gender: ""
+          name: ""
+          nameHasPerfix: ""
+          nameHasPostfix: ""
+          officeCode: ""
+          officeName: ""
+          shenasnameNo: ""
+          shenasnameSeri: ""
+          shenasnameSerial: ""
+          nin: "{{nationalCode}}"
+        payloadClass: "ix.microserver.registryoffice.messages.InquiryRequest"
+        senderId: "melal bank"
+        plainId: "20230116091236501"
+        encryptedId: "CdX4YWSZHmuiAOfT"
+        receiverId: "registry-office"
+        service: "registry-office"
+        action: "inquiry2"
+        version: "1.0.0"
+        timeout: ""
     response:
       status: 200
       map:
-        TheCCompany : "$.result.data.TheCCompany"
-
+        # inqueryResults is an ARRAY of records -> first record via [0]
+        birthDate:        "$.payload.inqueryResults[0].birthDate"
+        bookNo:           "$.payload.inqueryResults[0].bookNo"
+        bookRow:          "$.payload.inqueryResults[0].bookRow"
+        deathStatus:      "$.payload.inqueryResults[0].deathStatus"
+        deathDate:        "$.payload.inqueryResults[0].deathDate"
+        family:           "$.payload.inqueryResults[0].family"
+        fatherName:       "$.payload.inqueryResults[0].fatherName"
+        gender:           "$.payload.inqueryResults[0].gender"
+        name:             "$.payload.inqueryResults[0].name"
+        nin:              "$.payload.inqueryResults[0].nin"
+        officeCode:       "$.payload.inqueryResults[0].officeCode"
+        officeName:       "$.payload.inqueryResults[0].officeName"
+        shenasnameNo:     "$.payload.inqueryResults[0].shenasnameNo"
+        shenasnameSeri:   "$.payload.inqueryResults[0].shenasnameSeri"
+        shenasnameSerial: "$.payload.inqueryResults[0].shenasnameSerial"
+        conversationId:   "$.conversationId"
     business_errors:
-      - when: { path: "$.result.data.Result.Code", not_equals: "1000" }
+      - when: { path: "$.type", equals: "EXCEPTION" }
         status: 400
-        code: UPSTREAM_ERROR
-        message: "{{ $.result.data.Result.Message }}"
+        code: DISPATCH_ERROR
+        message: "{{ $.payload.exceptionCode }}"

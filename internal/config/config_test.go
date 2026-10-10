@@ -55,10 +55,15 @@ func TestNestedBodyLoads(t *testing.T) {
 	}
 }
 
-func TestFormBodyMustBeFlat(t *testing.T) {
-	_, err := loadYAML(t, strings.Replace(nestedYAML, "%s", "form", 1))
-	if err == nil || !strings.Contains(err.Error(), "nested values need format: json") {
-		t.Errorf("err = %v", err)
+func TestFormStyleBodiesMustBeFlat(t *testing.T) {
+	for _, format := range []string{"form", "multipart"} {
+		_, err := loadYAML(t, strings.Replace(nestedYAML, "%s", format, 1))
+		if err == nil || !strings.Contains(err.Error(), "nested values need format: json") {
+			t.Errorf("%s: err = %v", format, err)
+		}
+	}
+	if _, err := loadYAML(t, strings.Replace(nestedYAML, "%s", "xml", 1)); err == nil || !strings.Contains(err.Error(), "json, form or multipart") {
+		t.Errorf("unknown format: err = %v", err)
 	}
 }
 

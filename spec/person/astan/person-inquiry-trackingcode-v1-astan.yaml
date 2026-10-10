@@ -3,31 +3,47 @@ schema_version: 1
 service:
   name: person-inquiry-trackingcode
   provider: astan
+  domain: test
+  version: 1.0.0                  # default: 0.1.0
 
 mode: pure
 
-upstream:
-  base_url: http://inquiryps.fam724.ir      # NOTE: plain HTTP, credentials cross the network unencrypted
-  base_url_env: INQUIRY_BASE_URL            # optional override (staging / local mock)
-  timeout: 10s
-  auth:
-    type: basic
-    username: { source: env, value: INQUIRY_USERNAME }
-    password: { source: env, value: INQUIRY_PASSWORD }
+server:                           # all optional
+  port: 8080                      # default: 8080 (env PORT overrides at runtime)
+  read_timeout: 10s               # default: 10s
+  write_timeout: 30s              # default: 30s (keep > upstream.timeout * (retries+1))
+  shutdown_timeout: 15s           # default: 15s
+  max_body_bytes: 1048576         # default: 1 MiB
+
 
 logging:
-  level: info                    # set to debug (or run with env LOG_LEVEL=debug) to log provider responses
-  debug_max_body_bytes: 2048     # truncate logged bodies (default 2048)
-  redact_fields: []   # JSON keys masked as "***" in debug logs (case-insensitive, any depth)
+  filePath: ./logs/
+  fileName: processor-app.log
+  encoding: json
+  level: info
+  console: true
+  rotating:
+    maxSize: 10       # Max size in MB before rotation
+    maxBackups: 5     # Number of old log files to keep
+    maxAge: 7         # Max age in days to retain old log files
+    compress: true    # Compress old log files
+
+########################################
 
 endpoints:
-  - name: get-estelam3
+  - name: person-inquiry-get-image
     method: POST
     path: /v1/astan/person/inquiry-with-trackingcode
     params:
-      - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$' }   # sent upstream as "nin"
-      - { name: birthDate,    in: body, required: true, pattern: '^[0-9]{8}$' }    # yyyymmdd, e.g. 13800415
+      - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$' }
+      - { name: birthDate,    in: body, required: true, pattern: '^[0-9]{8}$' }
+    ########################################
     upstream:
+      auth:
+        type: basic
+        username: { source: env, value: INQUIRY_USERNAME }
+        password: { source: env, value: INQUIRY_PASSWORD }
+      base_url: http://inquiryps.fam724.ir
       path: /astannix/GetEstelam3T
       body:
         arg0: "meas"
@@ -40,21 +56,20 @@ endpoints:
       status: 200
       map:
         bookNo: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.bookNo"
-        bookRow: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.bookRow"
+        bookRow: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.bookRow[0]"
         birthDate: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.birthDate"
         name: { $decode: base64, path: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.name" }
         family: { $decode: base64, path: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.family" }
-        fatherName: { $decode: base64, path: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.family" }
+        fatherName: { $decode: base64, path: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.fatherName" }
         gender: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.gender"
         officeName: { $decode: base64, path: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.officeName" }
         officeCode: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.officeCode"
         shenasnameNo: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.shenasnameNo"
         shenasnameSeri: { $decode: base64, path: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.shenasnameSeri" }
         shenasnameSerial: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.shenasnameSerial"
-        deathStatus: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.deathStatus"
+        deathStatus: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.deathStatus[0]"
         trackingInfo: "$.result.data.getEstelam3TResponse.return.trackingInfo"
-
-
+    ########################################
     business_errors:       
       # message
       - when: { path: "$.result.data.getEstelam3TResponse.return.message", equals: "err.record.not.found" }

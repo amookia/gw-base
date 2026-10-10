@@ -118,11 +118,11 @@ func (e *Endpoint) normalize() error {
 	switch e.Upstream.Format {
 	case "":
 		e.Upstream.Format = "json"
-	case "json", "form":
+	case "json", "form", "multipart":
 	default:
-		return fmt.Errorf("upstream.format must be json or form, got %q", e.Upstream.Format)
+		return fmt.Errorf("upstream.format must be json, form or multipart, got %q", e.Upstream.Format)
 	}
-	if err := checkBody(e.Upstream.Body, e.Upstream.Format == "form"); err != nil {
+	if err := checkBody(e.Upstream.Body, e.Upstream.Format != "json"); err != nil {
 		return fmt.Errorf("upstream.body.%w", err)
 	}
 	if e.Upstream.Timeout == 0 {

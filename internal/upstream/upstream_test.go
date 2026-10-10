@@ -36,6 +36,13 @@ func TestCallFormats(t *testing.T) {
 			}
 			return map[string]string{"nin": r.PostForm.Get("nin"), "name": r.PostForm.Get("name")}
 		}},
+		{"multipart", "multipart/form-data; boundary=", func(t *testing.T, r *http.Request) map[string]string {
+			if err := r.ParseMultipartForm(1 << 20); err != nil {
+				t.Fatal(err)
+			}
+			v := r.MultipartForm.Value
+			return map[string]string{"nin": v["nin"][0], "name": v["name"][0]}
+		}},
 	} {
 		t.Run(tc.format, func(t *testing.T) {
 			var gotType string
@@ -57,7 +64,7 @@ func TestCallFormats(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if gotType != tc.contentType {
+			if !strings.HasPrefix(gotType, tc.contentType) {
 				t.Errorf("content-type = %q, want %q", gotType, tc.contentType)
 			}
 			if got["nin"] != "0012345678" || got["name"] != "a b&c" {
@@ -93,11 +100,13 @@ func TestCallNestedJSON(t *testing.T) {
 		t.Errorf("body = %s, want %s", b, want)
 	}
 
-	// form bodies must stay flat
-	form, _ := New(http.MethodPost, config.Upstream{BaseURL: srv.URL, Path: "/x", Format: "form", Timeout: time.Second},
-		slog.New(slog.NewTextHandler(io.Discard, nil)))
-	if _, _, err := form.Call(context.Background(), fields); err == nil {
-		t.Error("expected an error for nested form body")
+	// form-style bodies must stay flat
+	for _, format := range []string{"form", "multipart"} {
+		flat, _ := New(http.MethodPost, config.Upstream{BaseURL: srv.URL, Path: "/x", Format: format, Timeout: time.Second},
+			slog.New(slog.NewTextHandler(io.Discard, nil)))
+		if _, _, err := flat.Call(context.Background(), fields); err == nil {
+			t.Errorf("expected an error for a nested %s body", format)
+		}
 	}
 }
 

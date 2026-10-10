@@ -3,12 +3,10 @@ package upstream
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"time"
 
 	"gw-base/internal/config"
@@ -48,32 +46,9 @@ func New(method string, cfg config.Upstream, logger *slog.Logger) (*Upstream, er
 	}, nil
 }
 
-// encode serializes fields as a JSON object or a urlencoded form, per upstream.format.
-func (u *Upstream) encode(fields map[string]any) (body []byte, contentType string, err error) {
-	if len(fields) == 0 {
-		return nil, "", nil
-	}
-	if u.format == "form" {
-		form := make(url.Values, len(fields))
-		for k, v := range fields {
-			switch t := v.(type) {
-			case nil:
-				form.Set(k, "")
-			case map[string]any, []any:
-				return nil, "", fmt.Errorf("field %q: form bodies cannot be nested", k)
-			default:
-				form.Set(k, fmt.Sprint(t))
-			}
-		}
-		return []byte(form.Encode()), "application/x-www-form-urlencoded", nil
-	}
-	body, err = json.Marshal(fields)
-	return body, "application/json", err
-}
-
 // Call sends fields (may be empty) and returns the response body and status code.
 func (u *Upstream) Call(ctx context.Context, fields map[string]any) ([]byte, int, error) {
-	body, contentType, err := u.encode(fields)
+	body, contentType, err := encode(u.format, fields)
 	if err != nil {
 		return nil, 0, fmt.Errorf("encoding body: %w", err)
 	}
@@ -81,7 +56,7 @@ func (u *Upstream) Call(ctx context.Context, fields map[string]any) ([]byte, int
 	if err != nil {
 		return nil, 0, fmt.Errorf("building request: %w", err)
 	}
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", "*/*")
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
