@@ -1,0 +1,101 @@
+# =============================================================================
+# svcgen spec for the registry-office dispatch inquiry2 curl
+# Source curl: POST http://10.50.57.5/dispatch  (Content-Type: application/json)
+# Validate:  ./svcgen -f examples/dispatch-inquiry2.yaml -o /tmp/out -check
+# =============================================================================
+schema_version: 1
+
+service:
+  name: person-inquiry-sitaad
+  provider: sitaad
+  domain: inquiry-person
+
+mode: pure
+
+upstream:
+  base_url: http://10.50.57.5           # NOTE: plain HTTP
+  base_url_env: DISPATCH_BASE_URL       # optional override (staging / local mock)
+  timeout: 10s
+
+logging:
+  level: info
+  redact_fields: [nin, birthDate, name, family, fatherName]
+
+endpoints:
+  - name: inquiry2
+    description: Registry office inquiry2 via dispatch envelope
+    method: POST
+    path: /v1/sitaad/person/inquiry    
+    params:
+      - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$' }
+      - { name: birthDate,   in: body, required: true,  pattern: '^[0-9]{8}$' }   # e.g. 13800415
+    upstream:
+      path: /dispatch
+      body:
+        payload:
+          birthDate: "{{birthDate}}"
+          bookNo: ""
+          bookRow: ""
+          dateHasPostfix: ""
+          family: ""
+          familyHasPerfix: ""
+          familyHasPostfix: ""
+          fatherName: ""
+          gender: ""
+          name: ""
+          nameHasPerfix: ""
+          nameHasPostfix: ""
+          officeCode: ""
+          officeName: ""
+          shenasnameNo: ""
+          shenasnameSeri: ""
+          shenasnameSerial: ""
+          nin: "{{nationalCode}}"
+        payloadClass: "ix.microserver.registryoffice.messages.InquiryRequest"
+        senderId: "melal bank"
+        plainId: "20230116091236501"
+        encryptedId: "CdX4YWSZHmuiAOfT"
+        receiverId: "registry-office"
+        service: "registry-office"
+        action: "inquiry2"
+        version: "1.0.0"
+        timeout: ""
+    response:
+      #status: 200
+      #passthrough: true                 # response shape unknown -> forward as-is
+      envelope: true                     # REQUIRED with passthrough
+      status: 200
+      map:
+        # inqueryResults is an ARRAY of records -> first record via [0]
+        birthDate:        "$.payload.inqueryResults[0].birthDate"
+        bookNo:           "$.payload.inqueryResults[0].bookNo"
+        bookRow:          "$.payload.inqueryResults[0].bookRow"
+        deathStatus:      "$.payload.inqueryResults[0].deathStatus"
+        deathDate:        "$.payload.inqueryResults[0].deathDate"
+        family:           "$.payload.inqueryResults[0].family"
+        fatherName:       "$.payload.inqueryResults[0].fatherName"
+        gender:           "$.payload.inqueryResults[0].gender"
+        name:             "$.payload.inqueryResults[0].name"
+        nin:              "$.payload.inqueryResults[0].nin"
+        officeCode:       "$.payload.inqueryResults[0].officeCode"
+        officeName:       "$.payload.inqueryResults[0].officeName"
+        shenasnameNo:     "$.payload.inqueryResults[0].shenasnameNo"
+        shenasnameSeri:   "$.payload.inqueryResults[0].shenasnameSeri"
+        shenasnameSerial: "$.payload.inqueryResults[0].shenasnameSerial"
+        conversationId:   "$.conversationId"
+    business_errors:
+      # no record returned ([] or missing) -> 404
+      - when: { path: "$.payload.exceptionCode", exists: true }
+        status: 400
+        code: DISPATCH_ERROR
+        message: "{{ $.payload.exceptionCode }}"
+
+      # registry-office answers 200 + non-empty message[] on business failure
+      # (no not_empty operator: express as NOT empty)
+      # - when:
+      #     all:
+      #       - { path: "$.payload.inqueryResults[0].message", exists: true }
+      #       - not: { path: "$.payload.inqueryResults[0].message", empty: true }
+      #   status: 422
+      #   code: DISPATCH_ERROR
+      #   message: "{{ $.payload.inqueryResults[0].message }}"

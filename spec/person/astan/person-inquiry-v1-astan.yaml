@@ -1,0 +1,62 @@
+schema_version: 1
+
+service:
+  name: person-inquiry-astan
+  provider: astan
+  domain: inquiry-person
+
+mode: pure
+
+upstream:
+  base_url: http://inquiryps.fam724.ir      # NOTE: plain HTTP, credentials cross the network unencrypted
+  base_url_env: INQUIRY_BASE_URL            # optional override (staging / local mock)
+  timeout: 10s
+  auth:
+    type: basic
+    username: { source: env, value: INQUIRY_USERNAME }
+    password: { source: env, value: INQUIRY_PASSWORD }
+
+logging:
+  level: info                    # set to debug (or run with env LOG_LEVEL=debug) to log provider responses
+  debug_max_body_bytes: 2048     # truncate logged bodies (default 2048)
+  redact_fields: []   # JSON keys masked as "***" in debug logs (case-insensitive, any depth)
+
+endpoints:
+  - name: get-estelam3
+    method: POST
+    path: /v1/astan/person/inquiry
+    params:
+      - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$' }
+      - { name: birthDate,    in: body, required: true, replace: [{ from: '/' }, { regex: '[-.]', to: '' }] }  # yyyymmdd, e.g. 13800415
+    upstream:
+      path: /astannix/GetEstelam3
+      body:
+        arg0: "meas"
+        arg1: "M!e@A-s*"
+        arg2: "36547"
+        arg3: "D3F543F4F6E3"
+        nin: "{{nationalCode}}"
+        birthDate: "{{birthDate}}"
+    response:
+      status: 200
+      map:
+        bookNo: "$.result.data.getEstelam3Response.return.bookNo"
+        bookRow: "$.result.data.getEstelam3Response.return.bookRow"
+        birthDate: "$.result.data.getEstelam3Response.return.birthDate"
+        name: { $decode: base64, path: "$.result.data.getEstelam3Response.return.name" }
+        family: { $decode: base64, path: "$.result.data.getEstelam3Response.return.family" }
+        fatherName: { $decode: base64, path: "$.result.data.getEstelam3Response.return.family" }
+        gender: "$.result.data.getEstelam3Response.return.gender"
+        officeName: { $decode: base64, path: "$.result.data.getEstelam3Response.return.officeName" }
+        officeCode: "$.result.data.getEstelam3Response.return.officeCode"
+        shenasnameNo: "$.result.data.getEstelam3Response.return.shenasnameNo"
+        shenasnameSeri: { $decode: base64, path: "$.result.data.getEstelam3Response.return.shenasnameSeri" }
+        shenasnameSerial: "$.result.data.getEstelam3Response.return.shenasnameSerial"
+        deathStatus: "$.result.data.getEstelam3Response.return.deathStatus"
+
+    business_errors:       
+      # message
+      - when: { path: "$.result.data.getEstelam3Response.return.message", equals: "err.record.not.found" }
+        status: 404
+        code: PERSON_NOT_FOUND
+        message: "{{ $.result.data.getEstelam3Response.return.message }}"

@@ -1,0 +1,36 @@
+schema_version: 1
+service:
+  name: post-gsb-adapter
+  provider: pgsb
+  domain: inquiry
+
+mode: hybrid
+
+upstream:
+  base_url: http://inquiryps.fam724.ir
+  base_url_env: GSB_BASE_URL
+  timeout: 10s
+  auth:
+    type: custom
+    custom: { handler: astan-post-token }
+
+endpoints:
+  - name: address-by-postcode
+    method: POST
+    path: /v1/astan/post/address-by-postcode
+    params:
+      - { name: postCode, in: body, required: true }
+    upstream:
+      path: /gsbservices/post/AddressByPostcode
+      body:
+        Signature: ""
+        ClientBatchID: 31
+        Postcodes: [ 
+          {
+            ClientRowID : "122" , "PostCode" : " {{ postCode }} "
+          }
+        ]
+    response:
+      passthrough: true
+      envelope: false
+      # business_errors: add once you know the provider's error codes
