@@ -306,3 +306,78 @@ func TestEnvelopeShape(t *testing.T) {
 		})
 	}
 }
+
+const typedYAML = `
+schema_version: 1
+service: { name: svc }
+endpoints:
+  - name: typed
+    method: POST
+    path: /v1/typed
+    params:
+      - { name: id,    in: body,  required: true }
+      - { name: ok,    in: body,  required: true, type: boolean }
+      - { name: age,   in: body,  type: integer }
+      - { name: score, in: query, type: number }
+    upstream:
+      base_url: UPSTREAM_URL
+      path: /p
+      body: { id: "{{id}}", ok: "{{ok}}", age: "{{age}}", score: "{{score}}" }
+    response:
+      map: { id: "$.id" }
+`
+
+func TestTypedParams(t *testing.T) {
+	var seen map[string]string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = map[string]string{}
+		_ = json.NewDecoder(r.Body).Decode(&seen)
+		_, _ = io.WriteString(w, `{"id":"1"}`)
+	}))
+	defer srv.Close()
+
+	path := filepath.Join(t.TempDir(), "svc.yaml")
+	if err := os.WriteFile(path, []byte(strings.Replace(typedYAML, "UPSTREAM_URL", srv.URL, 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eng, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name, url, body, want string
+		status                int
+	}{
+		{"all valid; false still counts as sent", "/v1/typed?score=1.5", `{"id":"7","ok":false,"age":30}`, ``, 200},
+		{"boolean sent as text", "/v1/typed", `{"id":"7","ok":"true"}`, `ok must be a boolean`, 400},
+		{"missing required boolean", "/v1/typed", `{"id":"7"}`, `ok is required`, 400},
+		{"default type is string", "/v1/typed", `{"id":7,"ok":true}`, `id must be a string`, 400},
+		{"integer rejects a fraction", "/v1/typed", `{"id":"7","ok":true,"age":30.5}`, `age must be an integer`, 400},
+		{"integer rejects text", "/v1/typed", `{"id":"7","ok":true,"age":"30"}`, `age must be an integer`, 400},
+		{"query number rejects text", "/v1/typed?score=abc", `{"id":"7","ok":true}`, `score must be a number`, 400},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			seen = nil
+			rec := httptest.NewRecorder()
+			eng.router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, tc.url, strings.NewReader(tc.body)))
+			if rec.Code != tc.status || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s, want %d containing %q", rec.Code, rec.Body, tc.status, tc.want)
+			}
+			if tc.status == 400 && seen != nil {
+				t.Error("an invalid request must not reach the upstream")
+			}
+		})
+	}
+
+	// the valid case, again, to look at what the upstream received
+	rec := httptest.NewRecorder()
+	eng.router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/typed?score=1.5", strings.NewReader(`{"id":"7","ok":false,"age":30}`)))
+	if seen["ok"] != "false" || seen["age"] != "30" || seen["score"] != "1.5" || seen["id"] != "7" {
+		t.Errorf("upstream saw %v", seen)
+	}
+}

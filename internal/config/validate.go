@@ -93,7 +93,17 @@ func (e *Endpoint) normalize() error {
 		if !paramLocations[p.In] {
 			return fmt.Errorf("param %q: 'in' must be body, query, path or header", p.Name)
 		}
+		switch p.Type {
+		case "":
+			p.Type = TypeString
+		case TypeString, TypeBoolean, TypeInteger, TypeNumber:
+		default:
+			return fmt.Errorf("param %q: type must be string, boolean, integer or number, got %q", p.Name, p.Type)
+		}
 		if p.Pattern != "" {
+			if p.Type != TypeString {
+				return fmt.Errorf("param %q: pattern only applies to type string", p.Name)
+			}
 			re, err := regexp.Compile(p.Pattern)
 			if err != nil {
 				return fmt.Errorf("param %q: bad pattern: %w", p.Name, err)

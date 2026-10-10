@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -160,21 +159,21 @@ func (h *handler) collectParams(c *gin.Context) (map[string]string, error) {
 	out := make(map[string]string, len(h.ep.Params))
 	for _, p := range h.ep.Params {
 		var val string
+		var err error
 		switch p.In {
 		case "body":
 			if raw, found := body[p.Name]; found && raw != nil {
-				s, ok := scalar(raw)
-				if !ok {
-					return nil, fmt.Errorf("%s must be a string, number or boolean", p.Name)
-				}
-				val = s
+				val, err = fromJSON(p, raw)
 			}
 		case "query":
-			val = c.Query(p.Name)
+			val, err = fromText(p, c.Query(p.Name))
 		case "path":
-			val = c.Param(p.Name)
+			val, err = fromText(p, c.Param(p.Name))
 		case "header":
-			val = c.GetHeader(p.Name)
+			val, err = fromText(p, c.GetHeader(p.Name))
+		}
+		if err != nil {
+			return nil, err
 		}
 
 		if val == "" {
@@ -260,17 +259,4 @@ func decodeJSON(raw []byte) (any, error) {
 		return nil, err
 	}
 	return doc, nil
-}
-
-func scalar(v any) (string, bool) {
-	switch t := v.(type) {
-	case string:
-		return t, true
-	case json.Number:
-		return t.String(), true
-	case bool:
-		return strconv.FormatBool(t), true
-	default:
-		return "", false
-	}
 }

@@ -57,12 +57,21 @@ type Endpoint struct {
 	BusinessErrors []BusinessError `yaml:"business_errors"`
 }
 
+// Param types; an unset type means TypeString.
+const (
+	TypeString  = "string"
+	TypeBoolean = "boolean"
+	TypeInteger = "integer"
+	TypeNumber  = "number"
+)
+
 type Param struct {
 	Name     string         `yaml:"name"`
-	In       string         `yaml:"in"` // body | query | path | header
+	In       string         `yaml:"in"`   // body | query | path | header
+	Type     string         `yaml:"type"` // string (default) | boolean | integer | number
 	Required bool           `yaml:"required"`
-	Pattern  string         `yaml:"pattern"`
-	Re       *regexp.Regexp `yaml:"-"` // compiled Pattern, set by Load
+	Pattern  string         `yaml:"pattern"` // string params only
+	Re       *regexp.Regexp `yaml:"-"`       // compiled Pattern, set by Load
 }
 
 type Upstream struct {
