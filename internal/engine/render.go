@@ -35,6 +35,36 @@ func render(tpl string, lookup func(key string) (string, bool)) (string, error) 
 	return out, nil
 }
 
+// mapStrings returns a copy of v (scalar, list or object) with fn applied to every string in it.
+func mapStrings(v any, fn func(string) (string, error)) (any, error) {
+	switch t := v.(type) {
+	case string:
+		return fn(t)
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			r, err := mapStrings(e, fn)
+			if err != nil {
+				return nil, err
+			}
+			out[i] = r
+		}
+		return out, nil
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, e := range t {
+			r, err := mapStrings(e, fn)
+			if err != nil {
+				return nil, err
+			}
+			out[k] = r
+		}
+		return out, nil
+	default:
+		return v, nil
+	}
+}
+
 // lookupPath resolves a minimal JSONPath ($.a.b, $.items[0].id) against a decoded JSON document.
 func lookupPath(doc any, path string) (any, bool) {
 	rest, ok := strings.CutPrefix(path, "$.")
@@ -79,34 +109,5 @@ func stringify(v any) string {
 		return t
 	default:
 		return fmt.Sprint(t)
-	}
-}
-
-func mapStrings(v any, fn func(string) (string, error)) (any, error) {
-	switch t := v.(type) {
-	case string:
-		return fn(t)
-	case []any:
-		out := make([]any, len(t))
-		for i, e := range t {
-			r, err := mapStrings(e, fn)
-			if err != nil {
-				return nil, err
-			}
-			out[i] = r
-		}
-		return out, nil
-	case map[string]any:
-		out := make(map[string]any, len(t))
-		for k, e := range t {
-			r, err := mapStrings(e, fn)
-			if err != nil {
-				return nil, err
-			}
-			out[k] = r
-		}
-		return out, nil
-	default:
-		return v, nil
 	}
 }

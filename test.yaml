@@ -31,53 +31,33 @@ logging:
     maxAge: 7         # Max age in days to retain old log files
     compress: true    # Compress old log files
 
-
 endpoints:
-  - name: get-estelam3
+  - name: get-legal-info
     method: POST
-    path: /v1/inquiry                       # path your clients call on the adapter
+    path: /v1/astan/legal/inquiry
     params:
-      - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$' }   # sent upstream as "nin"
-      - { name: birthDate,    in: body, required: true, pattern: '^[0-9]{8}$' }    # yyyymmdd, e.g. 13800415
+      - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{11}$' }
     upstream:
-      base_url: http://127.0.0.1:8787      # NOTE: plain HTTP, credentials cross the network unencrypted
-      base_url_env: INQUIRY_BASE_URL            # optional override (staging / local mock)
-      timeout: 10s
       auth:
         type: basic
         username: { source: env, value: INQUIRY_USERNAME }
         password: { source: env, value: INQUIRY_PASSWORD }
-        #type: custom
-        #script: custom.lua
-        #script_is_file: true
-      path: /astannix/GetEstelam3
-      format: json                              # body encoding: json | form (default: json)
+      base_url: http://inquiryps.fam724.ir     # NOTE: plain HTTP, credentials cross the network unencrypted
+      #base_url: http://127.0.0.1:8787
+      base_url_env: INQUIRY_BASE_URL            # optional override (staging / local mock)
+      timeout: 10s
+      path: /astannix/sabteasnad/GetLatestInfo
       body:
-        arg0: "meas"      # fixed values from env (not client-controllable)
-        arg1: "M!e@A-s*"
-        arg2: "36547"
-        arg3: "D3F543F4F6E3"
-        nin: "{{nationalCode}}"
-        birthDate: "{{birthDate}}"
-        xx: { x1: "{{birthDate}}" }
-        #xx: [ x1: x2 ]
-
-
+        UserName: "MelalBank.Service"
+        PassWord: "48CD7C4BFA21DFE3E0630B2A010AAA58"
+        NationalCode: "{{nationalCode}}"
     response:
       status: 200
       map:
-        birthDate: "$.result.data.getEstelam3Response.return.birthDate"
-        name: { $decode: base64, path: "$.result.data.getEstelam3Response.return.name" }
-        family: { $decode: base64, path: "$.result.data.getEstelam3Response.return.family" }
-        fatherName: { $decode: base64, path: "$.result.data.getEstelam3Response.return.family" }
-        gender: "$.result.data.getEstelam3Response.return.gender"
-        officeName: "$.result.data.getEstelam3Response.return.officeName"
-        shenasnameSeri: { $decode: base64, path: "$.result.data.getEstelam3Response.return.shenasnameSeri" }
-        shenasnameSerial: "$.result.data.getEstelam3Response.return.shenasnameSerial"
+        TheCCompany : "$.result.data.TheCCompany"
 
-    business_errors:                      # add once you know how failures look
-      # message
-      - when: { path: "$.result.data.getEstelam3Response.return.message", equals: "err.record.not.found" }
-        status: 404
-        code: PERSON_NOT_FOUND
-        message: "{{ $.result.data.getEstelam3Response.return.message }}"
+    business_errors:
+      - when: { path: "$.result.data.Result.Code", not_equals: "1000" }
+        status: 400
+        code: UPSTREAM_ERROR
+        message: "{{ $.result.data.Result.Message }}"

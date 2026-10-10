@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	auth2 "gw-base/internal/upstream/auth"
 	"io"
 	"log/slog"
 	"net/http"
@@ -21,7 +20,7 @@ type Upstream struct {
 	method string
 	url    string
 	format string // json | form
-	auth   auth2.Authenticator
+	auth   Authenticator
 	logger *slog.Logger
 	client *http.Client
 }
@@ -31,7 +30,7 @@ func New(method string, cfg config.Upstream, logger *slog.Logger) (*Upstream, er
 	if err != nil {
 		return nil, err
 	}
-	auth, err := auth2.NewAuthenticator(cfg.Auth)
+	auth, err := NewAuthenticator(cfg.Auth)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +43,7 @@ func New(method string, cfg config.Upstream, logger *slog.Logger) (*Upstream, er
 		// Own transport per upstream: the connection pool is reused across calls.
 		client: &http.Client{
 			Timeout:   cfg.Timeout,
-			Transport: http.DefaultTransport.(*http.Transport).Clone(),
+			Transport: debugTransport{next: http.DefaultTransport.(*http.Transport).Clone(), logger: logger},
 		},
 	}, nil
 }

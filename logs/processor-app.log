@@ -10,3 +10,69 @@
 {"time":"2026-10-08T23:21:33.705039693+03:30","level":"ERROR","msg":"upstream call failed","service":"person-inquiry","version":"1.0.0","endpoint":"get-estelam3","error":"calling upstream: Post \"http://127.0.0.1:8787/astannix/GetEstelam3\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)"}
 {"time":"2026-10-08T23:21:33.70722286+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/inquiry","status":502,"duration_ms":10004}
 {"time":"2026-10-08T23:22:05.559607703+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:35:54.742259716+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:35:54.746959789+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:37:27.243165784+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:37:49.551132961+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:37:49.553114868+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:37:52.586611007+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":401,"duration_ms":31}
+{"time":"2026-10-10T08:37:52.589390421+03:30","level":"ERROR","msg":"upstream returned error status","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","status":401}
+{"time":"2026-10-10T08:37:52.591320778+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":502,"duration_ms":37}
+{"time":"2026-10-10T08:38:18.158924246+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:38:51.322566855+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:38:51.325179389+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:39:04.131380416+03:30","level":"ERROR","msg":"upstream call failed","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","error":"calling upstream: Post \"http://127.0.0.1:8787/astannix/sabteasnad/GetLatestInfo\": EOF"}
+{"time":"2026-10-10T08:39:04.135696791+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":502,"duration_ms":2968}
+{"time":"2026-10-10T08:39:05.84344334+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:40:23.627796268+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:40:23.633871397+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:40:31.700371786+03:30","level":"ERROR","msg":"upstream call failed","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","error":"calling upstream: Post \"http://127.0.0.1:8787/astannix/sabteasnad/GetLatestInfo\": EOF"}
+{"time":"2026-10-10T08:40:31.711806792+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":502,"duration_ms":2426}
+{"time":"2026-10-10T08:40:33.482307057+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:41:01.710759696+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:41:01.713949366+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:41:03.845325743+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":200,"duration_ms":218}
+{"time":"2026-10-10T08:41:03.847252324+03:30","level":"WARN","msg":"upstream business error","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","upstream_status":200,"code":"UPSTREAM_ERROR"}
+{"time":"2026-10-10T08:41:03.847661383+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":400,"duration_ms":221}
+{"time":"2026-10-10T08:41:19.531638969+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:41:28.890962697+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:41:28.893790399+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:41:32.745397628+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":200,"duration_ms":220}
+{"time":"2026-10-10T08:41:32.747502369+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":200,"duration_ms":224}
+{"time":"2026-10-10T08:41:57.635637917+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:42:54.998499645+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:42:55.001798908+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:42:57.20481689+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":200,"duration_ms":159}
+{"time":"2026-10-10T08:42:57.208024314+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":200,"duration_ms":163}
+{"time":"2026-10-10T08:43:30.714341595+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:47:23.914059995+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:47:23.916231289+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:47:31.998007699+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":200,"duration_ms":181}
+{"time":"2026-10-10T08:47:32.000022456+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":200,"duration_ms":184}
+{"time":"2026-10-10T08:47:55.503948984+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:48:31.422434668+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:48:31.424647324+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:48:33.547794925+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":200,"duration_ms":158}
+{"time":"2026-10-10T08:48:33.548286888+03:30","level":"WARN","msg":"upstream business error","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","upstream_status":200,"code":"UPSTREAM_ERROR"}
+{"time":"2026-10-10T08:48:33.552070771+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":400,"duration_ms":163}
+{"time":"2026-10-10T08:48:41.182528358+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":200,"duration_ms":283}
+{"time":"2026-10-10T08:48:41.18301258+03:30","level":"WARN","msg":"upstream business error","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","upstream_status":200,"code":"UPSTREAM_ERROR"}
+{"time":"2026-10-10T08:48:41.183709127+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":400,"duration_ms":284}
+{"time":"2026-10-10T08:48:52.114706476+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:53:54.477720147+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:53:54.484455813+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:53:59.432113351+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":200,"duration_ms":326}
+{"time":"2026-10-10T08:53:59.436374123+03:30","level":"WARN","msg":"upstream business error","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","upstream_status":200,"code":"UPSTREAM_ERROR"}
+{"time":"2026-10-10T08:53:59.438091079+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":400,"duration_ms":333}
+{"time":"2026-10-10T08:54:08.059159255+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":200,"duration_ms":159}
+{"time":"2026-10-10T08:54:08.059554519+03:30","level":"WARN","msg":"upstream business error","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","upstream_status":200,"code":"UPSTREAM_ERROR"}
+{"time":"2026-10-10T08:54:08.060025097+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":400,"duration_ms":160}
+{"time":"2026-10-10T08:54:09.926984381+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}
+{"time":"2026-10-10T08:54:34.404558722+03:30","level":"INFO","msg":"route registered","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","method":"POST","path":"/v1/astan/legal/inquiry"}
+{"time":"2026-10-10T08:54:34.409136457+03:30","level":"INFO","msg":"listening","service":"person-inquiry","version":"1.0.0","addr":":8080","mode":"pure"}
+{"time":"2026-10-10T08:54:41.297792375+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":200,"duration_ms":265}
+{"time":"2026-10-10T08:54:41.300064659+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":200,"duration_ms":268}
+{"time":"2026-10-10T08:54:45.698534861+03:30","level":"INFO","msg":"upstream call complete","service":"person-inquiry","version":"1.0.0","method":"POST","url":"http://inquiryps.fam724.ir/astannix/sabteasnad/GetLatestInfo","status":200,"duration_ms":152}
+{"time":"2026-10-10T08:54:45.736550182+03:30","level":"WARN","msg":"upstream business error","service":"person-inquiry","version":"1.0.0","endpoint":"get-legal-info","upstream_status":200,"code":"UPSTREAM_ERROR"}
+{"time":"2026-10-10T08:54:45.736884174+03:30","level":"INFO","msg":"request","service":"person-inquiry","version":"1.0.0","method":"POST","route":"/v1/astan/legal/inquiry","status":400,"duration_ms":190}
+{"time":"2026-10-10T08:54:52.670948927+03:30","level":"INFO","msg":"shutting down","service":"person-inquiry","version":"1.0.0"}

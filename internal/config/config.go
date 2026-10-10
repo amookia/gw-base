@@ -35,7 +35,7 @@ type Logging struct {
 	FileName string   `yaml:"fileName"`
 	Encoding string   `yaml:"encoding"`
 	Level    string   `yaml:"level"`
-	Logger   string   `yaml:"logger"`
+	Logger   string   `yaml:"logger"` // logger backend; default "slog"
 	Console  bool     `yaml:"console"`
 	Rotating Rotating `yaml:"rotating"`
 }
@@ -76,12 +76,9 @@ type Upstream struct {
 }
 
 type Auth struct {
-	Type         string            `yaml:"type"` // basic
-	Username     Secret            `yaml:"username"`
-	Password     Secret            `yaml:"password"`
-	Script       string            `yaml:"script,omitempty"` // path or inline Lua
-	ScriptIsFile bool              `yaml:"script_is_file,omitempty"`
-	Cache        map[string]string `yaml:"cache,omitempty"` // optional initial cache
+	Type     string `yaml:"type"` // basic
+	Username Secret `yaml:"username"`
+	Password Secret `yaml:"password"`
 }
 
 type Secret struct {
