@@ -95,6 +95,9 @@ type Secret struct {
 	Value  string `yaml:"value"`  // env var name
 }
 
+// PathStatus is the when.path (and message placeholder) for the upstream's HTTP status.
+const PathStatus = "@status"
+
 // BusinessError turns an upstream answer into an error for the client.
 // It is checked on every JSON answer, whatever the upstream's HTTP status.
 type BusinessError struct {
@@ -104,8 +107,9 @@ type BusinessError struct {
 	Message string `yaml:"message"` // may contain {{ $.json.path }} templates
 }
 
-// When matches on one value of the upstream JSON. Set exactly one of
-// Equals / NotEquals; a path that is missing from the answer never matches.
+// When matches on one value of the upstream answer: a JSON path ("$.a.b") or
+// the HTTP status ("@status"). Set exactly one of Equals / NotEquals; a path
+// that is missing from the answer never matches.
 type When struct {
 	Path      string  `yaml:"path"`
 	Equals    *string `yaml:"equals"`

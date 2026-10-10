@@ -74,7 +74,7 @@ endpoints:
 `
 
 func TestBusinessErrorRules(t *testing.T) {
-	ok := `      - { when: { path: "$.a", equals: "-1" }, status: 400, code: E }`
+	ok := `      - { when: { path: "$.a", equals: -1 }, status: 400, code: E }` // unquoted numbers are fine
 	if cfg, err := loadYAML(t, bizHead+ok); err != nil {
 		t.Fatal(err)
 	} else if be := cfg.Endpoints[0].BusinessErrors[0]; be.Status != 400 || *be.When.Equals != "-1" {
@@ -95,12 +95,61 @@ func TestBusinessErrorRules(t *testing.T) {
 		})
 	}
 
+	// the HTTP status can be matched too, with an unquoted number
+	cfg, err := loadYAML(t, bizHead+`      - { when: { path: "@status", equals: 401 }, status: 502, code: E }`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := cfg.Endpoints[0].BusinessErrors[0].When; w.Path != PathStatus || *w.Equals != "401" {
+		t.Errorf("when = %+v", w)
+	}
+
 	// status defaults to 422 and `equals: ""` is a valid condition
-	cfg, err := loadYAML(t, bizHead+`      - { when: { path: "$.a", equals: "" }, code: E }`)
+	cfg, err = loadYAML(t, bizHead+`      - { when: { path: "$.a", equals: "" }, code: E }`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if be := cfg.Endpoints[0].BusinessErrors[0]; be.Status != 422 || be.When.Equals == nil {
 		t.Errorf("rule = %+v", be)
+	}
+}
+
+const paramHead = `
+schema_version: 1
+service: { name: svc }
+endpoints:
+  - name: p
+    method: POST
+    path: /v1/x
+    upstream: { base_url: "http://u.invalid", path: /p }
+    params:
+`
+
+func TestParamTypes(t *testing.T) {
+	cfg, err := loadYAML(t, paramHead+`
+      - { name: a, in: body }
+      - { name: b, in: body, required: true, type: boolean }
+      - { name: c ,   in: query, type: integer }
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range cfg.Endpoints[0].Params {
+		got = append(got, p.Type)
+	}
+	if strings.Join(got, ",") != "string,boolean,integer" {
+		t.Errorf("types = %v, want an unset type to default to string", got)
+	}
+
+	for name, tc := range map[string]struct{ param, want string }{
+		"unknown type":       {`      - { name: a, in: body, type: date }`, "type must be"},
+		"pattern on boolean": {`      - { name: a, in: body, type: boolean, pattern: '^x$' }`, "pattern only applies to type string"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := loadYAML(t, paramHead+tc.param); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v, want it to contain %q", err, tc.want)
+			}
+		})
 	}
 }

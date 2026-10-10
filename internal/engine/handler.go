@@ -75,12 +75,12 @@ func checkTemplates(ep config.Endpoint) error {
 	return nil
 }
 
-// checkMessages makes sure business error messages only use {{ $.json.paths }}.
+// checkMessages makes sure business error messages only use {{ $.json.paths }} or {{ @status }}.
 func checkMessages(ep config.Endpoint) error {
 	for i, be := range ep.BusinessErrors {
 		for _, key := range placeholders(be.Message) {
-			if !strings.HasPrefix(key, "$.") {
-				return fmt.Errorf("business_errors[%d]: message placeholder %q must be a $.json.path", i, key)
+			if key != config.PathStatus && !strings.HasPrefix(key, "$.") {
+				return fmt.Errorf("business_errors[%d]: message placeholder %q must be a $.json.path or %s", i, key, config.PathStatus)
 			}
 		}
 	}
@@ -108,20 +108,19 @@ func (h *handler) serve(c *gin.Context) {
 		return
 	}
 
-	doc, jsonErr := decodeJSON(raw)
+	doc, jsonErr := decodeJSON(raw) // doc is nil when the body is not JSON
+	ans := answer{status: status, doc: doc}
 
 	// Business errors win over transport-level checks: an upstream may report
-	// its error in the body of a 200 as well as in the body of a 500.
-	if jsonErr == nil {
-		if be := h.matchBusinessError(doc); be != nil {
-			msg, _ := render(be.Message, func(key string) (string, bool) {
-				v, _ := lookupPath(doc, key)
-				return stringify(v), true // a missing path renders empty
-			})
-			h.log.Warn("upstream business error", "upstream_status", status, "code", be.Code)
-			fail(c, be.Status, be.Code, msg)
-			return
-		}
+	// its error in the body of a 200 or a 500, or through its status alone.
+	if be := h.matchBusinessError(ans); be != nil {
+		msg, _ := render(be.Message, func(key string) (string, bool) {
+			v, _ := ans.value(key)
+			return stringify(v), true // a missing value renders empty
+		})
+		h.log.Warn("upstream business error", "upstream_status", status, "code", be.Code)
+		fail(c, be.Status, be.Code, msg)
+		return
 	}
 
 	if status < 200 || status > 299 {
@@ -214,10 +213,10 @@ func (h *handler) buildFields(params map[string]string) (map[string]any, error) 
 }
 
 // matchBusinessError returns the first business error whose condition holds.
-func (h *handler) matchBusinessError(doc any) *config.BusinessError {
+func (h *handler) matchBusinessError(ans answer) *config.BusinessError {
 	for i := range h.ep.BusinessErrors {
 		be := &h.ep.BusinessErrors[i]
-		v, ok := lookupPath(doc, be.When.Path)
+		v, ok := ans.value(be.When.Path)
 		if !ok {
 			continue // a missing value never matches
 		}

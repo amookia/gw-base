@@ -197,6 +197,14 @@ endpoints:
     response:
       map: { value: "$.result.data.Result.Value" }
     business_errors:
+      - when: { path: "@status", equals: 401 }
+        status: 502
+        code: UPSTREAM_UNAUTHORIZED
+        message: "provider rejected the credentials"
+      - when: { path: "@status", equals: 429 }
+        status: 503
+        code: RATE_LIMITED
+        message: "slow down ({{ @status }})"
       - when: { path: "$.result.data.Result.No", equals: "-1" }
         status: 400
         code: UPSTREAM_ERROR
@@ -221,6 +229,12 @@ func TestBusinessErrors(t *testing.T) {
 			400, `"code":"UPSTREAM_ERROR","message":"bad thing"`},
 		{"same error inside an HTTP 500", 500, result(`"No":-1,"Message":"bad thing","Level":"ok"`),
 			400, `"code":"UPSTREAM_ERROR","message":"bad thing"`},
+		{"401 matched by @status, non-JSON body", 401, `denied`,
+			502, `"code":"UPSTREAM_UNAUTHORIZED","message":"provider rejected the credentials"`},
+		{"401 matched by @status, JSON body", 401, result(`"No":0,"Level":"ok"`),
+			502, `"code":"UPSTREAM_UNAUTHORIZED"`},
+		{"@status usable in a message", 429, `{}`,
+			503, `"code":"RATE_LIMITED","message":"slow down (429)"`},
 		{"plain HTTP 500 is still a 502", 500, `boom`,
 			502, `"message":"upstream returned status 500"`},
 		{"No not -1 passes through", 200, result(`"No":0,"Value":"v","Level":"ok"`),

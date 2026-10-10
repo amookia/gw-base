@@ -147,8 +147,8 @@ func (e *Endpoint) normalize() error {
 }
 
 func (be *BusinessError) normalize() error {
-	if !strings.HasPrefix(be.When.Path, "$.") {
-		return fmt.Errorf("when.path %q must start with $.", be.When.Path)
+	if be.When.Path != PathStatus && !strings.HasPrefix(be.When.Path, "$.") {
+		return fmt.Errorf("when.path %q must start with $. or be %s", be.When.Path, PathStatus)
 	}
 	if (be.When.Equals == nil) == (be.When.NotEquals == nil) {
 		return errors.New("set exactly one of when.equals / when.not_equals")
