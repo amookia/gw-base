@@ -1,18 +1,34 @@
 schema_version: 1
+
 service:
-  name: post-gsb-adapter
-  provider: pgsb
-  domain: inquiry
+  name: post-address
+  provider: astan
+  domain: test
+  version: 1.0.0                  # default: 0.1.0
 
-mode: hybrid
+mode: pure
 
-upstream:
-  base_url: http://inquiryps.fam724.ir
-  base_url_env: GSB_BASE_URL
-  timeout: 10s
-  auth:
-    type: custom
-    custom: { handler: astan-post-token }
+server:                           # all optional
+  port: 8080                      # default: 8080 (env PORT overrides at runtime)
+  read_timeout: 10s               # default: 10s
+  write_timeout: 30s              # default: 30s (keep > upstream.timeout * (retries+1))
+  shutdown_timeout: 15s           # default: 15s
+  max_body_bytes: 1048576         # default: 1 MiB
+
+
+logging:
+  filePath: ./logs/
+  fileName: processor-app.log
+  encoding: json
+  level: debug
+  console: true
+  rotating:
+    maxSize: 10       # Max size in MB before rotation
+    maxBackups: 5     # Number of old log files to keep
+    maxAge: 7         # Max age in days to retain old log files
+    compress: true    # Compress old log files
+
+########################################
 
 endpoints:
   - name: address-by-postcode
@@ -21,16 +37,47 @@ endpoints:
     params:
       - { name: postCode, in: body, required: true }
     upstream:
+      base_url: http://inquiryps.fam724.ir
       path: /gsbservices/post/AddressByPostcode
+      auth:
+        type: custom
+        script: custom.lua
+        script_is_file: true
+      
       body:
         Signature: ""
         ClientBatchID: 31
         Postcodes: [ 
           {
-            ClientRowID : "122" , "PostCode" : " {{ postCode }} "
+            ClientRowID : "122" , "PostCode" : "{{ postCode }}"
           }
         ]
+      
     response:
-      passthrough: true
-      envelope: false
-      # business_errors: add once you know the provider's error codes
+      status: 200
+      map:
+        buildingName: "$.Data[0].Result.BuildingName"
+        description: "$.Data[0].Result.Description"
+        errorCode: "$.Data[0].Result.ErrorCode"
+        floor: "$.Data[0].Result.Floor"
+        houseNumber: "$.Data[0].Result.HouseNumber"
+        localityCode: "$.Data[0].Result.LocalityCode"
+        localityName: "$.Data[0].Result.LocalityName"
+        localityType: "$.Data[0].Result.LocalityType"
+        mainAvenue: "$.Data[0].Result.MainAvenue"
+        postCode: "$.Data[0].Result.PostCode"
+        province: "$.Data[0].Result.Province"
+        sideFloor: "$.Data[0].Result.SideFloor"
+        street: "$.Data[0].Result.Street"
+        street2: "$.Data[0].Result.Street2"
+        subLocality: "$.Data[0].Result.SubLocality"
+        townShip: "$.Data[0].Result.TownShip"
+        traceID: "$.Data[0].Result.TraceID"
+        village: "$.Data[0].Result.Village"
+        zone: "$.Data[0].Result.Zone"
+    
+    business_errors:
+      - when: { path: "$.ResCode", not_equals: 0 }
+        status: 404
+        code: POST_CODE_NOT_FOUND
+        message: "{{ $.Data[0].Errors[0].ErrorMessage }}"
