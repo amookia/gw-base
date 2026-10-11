@@ -1,35 +1,43 @@
-# =============================================================================
-# svcgen spec for the registry-office dispatch inquiry2 curl
-# Source curl: POST http://10.50.57.5/dispatch  (Content-Type: application/json)
-# Validate:  ./svcgen -f examples/dispatch-inquiry2.yaml -o /tmp/out -check
-# =============================================================================
 schema_version: 1
 
 service:
   name: person-inquiry-sitaad
   provider: sitaad
-  domain: inquiry-person
+  domain: test
+  version: 1.0.0                  # default: 0.1.0
 
 mode: pure
 
-upstream:
-  base_url: http://10.50.57.5           # NOTE: plain HTTP
-  base_url_env: DISPATCH_BASE_URL       # optional override (staging / local mock)
-  timeout: 10s
+server:                           # all optional
+  port: 8080                      # default: 8080 (env PORT overrides at runtime)
+  read_timeout: 10s               # default: 10s
+  write_timeout: 30s              # default: 30s (keep > upstream.timeout * (retries+1))
+  shutdown_timeout: 15s           # default: 15s
+  max_body_bytes: 1048576         # default: 1 MiB
+
 
 logging:
-  level: info
-  redact_fields: [nin, birthDate, name, family, fatherName]
+  filePath: ./logs/
+  fileName: processor-app.log
+  encoding: json
+  level: debug
+  console: true
+  rotating:
+    maxSize: 10       # Max size in MB before rotation
+    maxBackups: 5     # Number of old log files to keep
+    maxAge: 7         # Max age in days to retain old log files
+    compress: true    # Compress old log files
 
+########################################
 endpoints:
-  - name: inquiry2
-    description: Registry office inquiry2 via dispatch envelope
+  - name: person-relations
     method: POST
     path: /v1/sitaad/person/inquiry    
     params:
       - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$' }
       - { name: birthDate,   in: body, required: true,  pattern: '^[0-9]{8}$' }   # e.g. 13800415
     upstream:
+      base_url: http://inquiryps.fam724.ir
       path: /dispatch
       body:
         payload:
@@ -61,12 +69,8 @@ endpoints:
         version: "1.0.0"
         timeout: ""
     response:
-      #status: 200
-      #passthrough: true                 # response shape unknown -> forward as-is
-      envelope: true                     # REQUIRED with passthrough
       status: 200
       map:
-        # inqueryResults is an ARRAY of records -> first record via [0]
         birthDate:        "$.payload.inqueryResults[0].birthDate"
         bookNo:           "$.payload.inqueryResults[0].bookNo"
         bookRow:          "$.payload.inqueryResults[0].bookRow"
@@ -83,19 +87,9 @@ endpoints:
         shenasnameSeri:   "$.payload.inqueryResults[0].shenasnameSeri"
         shenasnameSerial: "$.payload.inqueryResults[0].shenasnameSerial"
         conversationId:   "$.conversationId"
-    business_errors:
-      # no record returned ([] or missing) -> 404
-      - when: { path: "$.payload.exceptionCode", exists: true }
-        status: 400
-        code: DISPATCH_ERROR
-        message: "{{ $.payload.exceptionCode }}"
-
-      # registry-office answers 200 + non-empty message[] on business failure
-      # (no not_empty operator: express as NOT empty)
-      # - when:
-      #     all:
-      #       - { path: "$.payload.inqueryResults[0].message", exists: true }
-      #       - not: { path: "$.payload.inqueryResults[0].message", empty: true }
-      #   status: 422
-      #   code: DISPATCH_ERROR
-      #   message: "{{ $.payload.inqueryResults[0].message }}"
+    
+    business_errors:       
+      - when: { path: "$.type", equals: "EXCEPTION" }
+        status: 404
+        code: PERSON_NOT_FOUND
+        message: "{{ $.payload.exceptionMessage }}"

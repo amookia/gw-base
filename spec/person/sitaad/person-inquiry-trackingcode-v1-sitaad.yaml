@@ -1,0 +1,108 @@
+schema_version: 1
+
+service:
+  name: person-inquiry-sitaad
+  provider: sitaad
+  domain: test
+  version: 1.0.0                  # default: 0.1.0
+
+mode: pure
+
+server:                           # all optional
+  port: 8080                      # default: 8080 (env PORT overrides at runtime)
+  read_timeout: 10s               # default: 10s
+  write_timeout: 30s              # default: 30s (keep > upstream.timeout * (retries+1))
+  shutdown_timeout: 15s           # default: 15s
+  max_body_bytes: 1048576         # default: 1 MiB
+
+
+logging:
+  filePath: ./logs/
+  fileName: processor-app.log
+  encoding: json
+  level: debug
+  console: true
+  rotating:
+    maxSize: 10       # Max size in MB before rotation
+    maxBackups: 5     # Number of old log files to keep
+    maxAge: 7         # Max age in days to retain old log files
+    compress: true    # Compress old log files
+
+########################################
+endpoints:
+  - name: person-relations
+    method: POST
+    path: /v1/sitaad/person/inquiry    
+    params:
+      - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$' }
+      - { name: birthDate,   in: body, required: true,  pattern: '^[0-9]{8}$' }   # e.g. 13800415
+    upstream:
+      base_url: http://inquiryps.fam724.ir
+      path: /dispatch
+      body:
+        payload:
+          birthDate: "{{birthDate}}"
+          bookNo: ""
+          bookRow: ""
+          dateHasPostfix: ""
+          family: ""
+          familyHasPerfix: ""
+          familyHasPostfix: ""
+          fatherName: ""
+          gender: ""
+          name: ""
+          nameHasPerfix: ""
+          nameHasPostfix: ""
+          officeCode: ""
+          officeName: ""
+          shenasnameNo: ""
+          shenasnameSeri: ""
+          shenasnameSerial: ""
+          nin: "{{nationalCode}}"
+        senderId: "melal bank"
+        plainId: "20230116091236501"
+        encryptedId: "CdX4YWSZHmuiAOfT"
+        receiverId: "registry-office"
+        service: "registry-office"
+        action: "inquiryH"
+        version: "1.0.0"
+        timeout: ""
+    response:
+      status: 200
+      map:
+        nin: "$.payload.nin"
+        name: "$.payload.name"
+        family: "$.payload.family"
+        fatherName: "$.payload.fatherName"
+        shenasnameSeri: "$.payload.shenasnameSeri"
+        shenasnameNo: "$.payload.shenasnameNo"
+        shenasnameSerial: "$.payload.shenasnameSerial"
+        birthDate: "$.payload.birthDate"
+        gender: "$.payload.gender"
+        deathStatus: "$.payload.deathStatus"
+        officeCode: "$.payload.officeCode"
+        officeName: "$.payload.officeName"
+        deathDate: "$.payload.deathDate"
+        zipcode: "$.payload.zipcode"
+        zipcodeDesc: "$.payload.zipcodeDesc"
+        addressDesc: "$.payload.addressDesc"
+        specialFeild: "$.payload.specialFeild"
+        birthplace: "$.payload.birthplace"
+        shenasnameIssueDate: "$.payload.shenasnameIssueDate"
+        shenasnameIssuePlace: "$.payload.shenasnameIssuePlace"
+        cardExpireDate: "$.payload.cardExpireDate"
+        cardSeri: "$.payload.cardSeri"
+        cardSrno: "$.payload.cardSrno"
+        conversationId: "$.conversationId"
+
+    business_errors:       
+      - when: { path: "$.type", equals: "EXCEPTION" }
+        status: 404
+        code: PERSON_NOT_FOUND
+        message: "{{ $.payload.exceptionMessage }}"
+    # business_errors:
+    #   # no record returned ([] or missing) -> 404
+    #   - when: { path: "$.payload.exceptionCode", exists: true }
+    #     status: 400
+    #     code: DISPATCH_ERROR
+    #     message: "{{ $.payload.exceptionCode }}"
