@@ -51,7 +51,28 @@ func luaHTTPPost(L *lua.LState) int {
 	urlStr := L.CheckString(1)
 	body := L.OptString(2, "")
 
-	resp, err := http.Post(urlStr, "application/x-www-form-urlencoded", strings.NewReader(body))
+	headers := L.OptTable(3, nil)
+
+	req, err := http.NewRequest(
+		http.MethodPost,
+		urlStr,
+		strings.NewReader(body),
+	)
+	if err != nil {
+		return pushHTTPResponse(L, nil, err)
+	}
+	
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	if headers != nil {
+		headers.ForEach(func(key, value lua.LValue) {
+			req.Header.Set(key.String(), value.String())
+		})
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+
 	return pushHTTPResponse(L, resp, err)
 }
 

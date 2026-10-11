@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gw-base/internal/config"
+	auth2 "gw-base/internal/upstream/auth"
 )
 
 const maxResponseBytes = 10 << 20
@@ -19,7 +20,7 @@ type Upstream struct {
 	url    string
 	format string // json | form | multipart
 	header map[string]string
-	auth   Authenticator
+	auth   auth2.Authenticator
 	logger *slog.Logger
 	client *http.Client
 }
@@ -29,7 +30,7 @@ func New(method string, cfg config.Upstream, logger *slog.Logger) (*Upstream, er
 	if err != nil {
 		return nil, err
 	}
-	auth, err := NewAuthenticator(cfg.Auth)
+	auth, err := auth2.NewAuthenticator(cfg.Auth)
 	if err != nil {
 		return nil, err
 	}

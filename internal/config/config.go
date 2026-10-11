@@ -86,9 +86,13 @@ type Upstream struct {
 }
 
 type Auth struct {
-	Type     string `yaml:"type"` // basic
+	Type     string `yaml:"type"` // basic | basic
 	Username Secret `yaml:"username"`
 	Password Secret `yaml:"password"`
+
+	Script       string            `yaml:"script,omitempty"`
+	ScriptIsFile bool              `yaml:"script_is_file,omitempty"`
+	Cache        map[string]string `yaml:"cache,omitempty"`
 }
 
 type Secret struct {
