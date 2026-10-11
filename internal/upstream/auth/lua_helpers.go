@@ -3,10 +3,17 @@ package auth
 import (
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	lua "github.com/yuin/gopher-lua"
 )
+
+func luaGetenv(L *lua.LState) int {
+	key := L.CheckString(1)
+	L.Push(lua.LString(os.Getenv(key)))
+	return 1
+}
 
 func registerLuaHelpers(L *lua.LState, cache AuthCache) {
 	L.OpenLibs()
@@ -16,6 +23,7 @@ func registerLuaHelpers(L *lua.LState, cache AuthCache) {
 	L.SetGlobal("set_header", L.NewFunction(luaSetHeader))
 	L.SetGlobal("http_post", L.NewFunction(luaHTTPPost))
 	L.SetGlobal("http_post_json", L.NewFunction(luaHTTPPostJSON))
+	L.SetGlobal("getenv", L.NewFunction(luaGetenv))
 }
 
 func luaCacheGet(cache AuthCache) lua.LGFunction {
@@ -61,7 +69,7 @@ func luaHTTPPost(L *lua.LState) int {
 	if err != nil {
 		return pushHTTPResponse(L, nil, err)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	if headers != nil {
