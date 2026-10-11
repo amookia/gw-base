@@ -122,6 +122,9 @@ func (e *Endpoint) normalize() error {
 	default:
 		return fmt.Errorf("upstream.format must be json, form or multipart, got %q", e.Upstream.Format)
 	}
+	if err := checkHeaders(e.Upstream); err != nil {
+		return fmt.Errorf("upstream.headers: %w", err)
+	}
 	if err := checkBody(e.Upstream.Body, e.Upstream.Format != "json"); err != nil {
 		return fmt.Errorf("upstream.body.%w", err)
 	}
@@ -216,4 +219,19 @@ func checkValue(v any) error {
 	default:
 		return fmt.Errorf("unsupported value of type %T (object keys must be strings)", v)
 	}
+}
+
+// checkHeaders rejects headers the service sets itself.
+func checkHeaders(u Upstream) error {
+	for name := range u.Headers {
+		switch http.CanonicalHeaderKey(name) {
+		case "Content-Type", "Content-Length":
+			return fmt.Errorf("%s is set from upstream.format and cannot be overridden", name)
+			//case "Authorization":
+			//	if u.Auth != nil {
+			//		return errors.New("use either upstream.auth or an Authorization header, not both")
+			//	}
+		}
+	}
+	return nil
 }

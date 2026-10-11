@@ -17,7 +17,8 @@ const maxResponseBytes = 10 << 20
 type Upstream struct {
 	method string
 	url    string
-	format string // json | form
+	format string // json | form | multipart
+	header map[string]string
 	auth   Authenticator
 	logger *slog.Logger
 	client *http.Client
@@ -36,6 +37,7 @@ func New(method string, cfg config.Upstream, logger *slog.Logger) (*Upstream, er
 		method: method,
 		url:    target,
 		format: cfg.Format,
+		header: cfg.Headers,
 		auth:   auth,
 		logger: logger,
 		// Own transport per upstream: the connection pool is reused across calls.
@@ -56,7 +58,11 @@ func (u *Upstream) Call(ctx context.Context, fields map[string]any) ([]byte, int
 	if err != nil {
 		return nil, 0, fmt.Errorf("building request: %w", err)
 	}
+	//req.Header.Set("Accept", "application/json") // default; upstream.headers may override it
 	req.Header.Set("Accept", "*/*")
+	for name, value := range u.header {
+		req.Header.Set(name, value)
+	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}

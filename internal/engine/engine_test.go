@@ -395,3 +395,17 @@ func TestTypedParams(t *testing.T) {
 		t.Errorf("upstream saw %v", seen)
 	}
 }
+
+func TestResolveHeaders(t *testing.T) {
+	t.Setenv("GW_TEST_TOKEN", "tok")
+	got, err := resolveHeaders(map[string]string{"Authorization": "Bearer {{env.GW_TEST_TOKEN}}", "Accept": "*/*"})
+	if err != nil || got["Authorization"] != "Bearer tok" || got["Accept"] != "*/*" {
+		t.Errorf("got %v, %v", got, err)
+	}
+	if _, err := resolveHeaders(map[string]string{"X": "{{env.GW_TEST_UNSET_VAR}}"}); err == nil {
+		t.Error("an unset env var must fail at startup")
+	}
+	if _, err := resolveHeaders(map[string]string{"X": "{{param}}"}); err == nil {
+		t.Error("only {{env.NAME}} is allowed in headers")
+	}
+}

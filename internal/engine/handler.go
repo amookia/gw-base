@@ -36,6 +36,11 @@ func newHandler(ep config.Endpoint, maxBody int64, logger *slog.Logger) (*handle
 	if err := checkMessages(ep); err != nil {
 		return nil, err
 	}
+	headers, err := resolveHeaders(ep.Upstream.Headers)
+	if err != nil {
+		return nil, err
+	}
+	ep.Upstream.Headers = headers
 	up, err := upstream.New(ep.Method, ep.Upstream, logger)
 	if err != nil {
 		return nil, err
@@ -73,6 +78,24 @@ func checkTemplates(ep config.Endpoint) error {
 		}
 	}
 	return nil
+}
+
+// resolveHeaders expands {{env.NAME}} in upstream.headers once, at startup.
+func resolveHeaders(headers map[string]string) (map[string]string, error) {
+	out := make(map[string]string, len(headers))
+	for name, tpl := range headers {
+		v, err := render(tpl, func(key string) (string, bool) {
+			if env, ok := strings.CutPrefix(key, envPrefix); ok {
+				return os.LookupEnv(env)
+			}
+			return "", false
+		})
+		if err != nil {
+			return nil, fmt.Errorf("upstream.headers.%s: %w", name, err)
+		}
+		out[name] = v
+	}
+	return out, nil
 }
 
 // checkMessages makes sure business error messages only use {{ $.json.paths }} or {{ @status }}.

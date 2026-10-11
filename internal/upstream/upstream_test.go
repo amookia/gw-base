@@ -172,3 +172,36 @@ func TestInfoLevelLogsNoPayloads(t *testing.T) {
 		t.Errorf("payloads must not be logged above debug level:\n%s", out)
 	}
 }
+
+func TestHeaders(t *testing.T) {
+	var got http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer srv.Close()
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	call := func(headers map[string]string) http.Header {
+		up, err := New(http.MethodPost, config.Upstream{BaseURL: srv.URL, Path: "/x", Format: "multipart",
+			Timeout: time.Second, Headers: headers}, quiet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := up.Call(context.Background(), map[string]any{"a": "b"}); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+
+	if h := call(nil); h.Get("Accept") != "application/json" {
+		t.Errorf("default Accept = %q", h.Get("Accept"))
+	}
+
+	h := call(map[string]string{"Accept": "*/*", "User-Agent": "curl/8.12.1", "X-Custom": "1", "Content-Type": "text/plain"})
+	if h.Get("Accept") != "*/*" || h.Get("User-Agent") != "curl/8.12.1" || h.Get("X-Custom") != "1" {
+		t.Errorf("headers not applied: %v", h)
+	}
+	if !strings.HasPrefix(h.Get("Content-Type"), "multipart/form-data; boundary=") {
+		t.Errorf("Content-Type must come from the format, got %q", h.Get("Content-Type"))
+	}
+}

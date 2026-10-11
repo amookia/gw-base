@@ -45,7 +45,7 @@ endpoints:
         username: { source: env, value: INQUIRY_USERNAME }
         password: { source: env, value: INQUIRY_PASSWORD }
       base_url: http://inquiryps.fam724.ir
-      path: /astannix/GetEstelam3T
+      path: /astangsb/sabteahval/ServicesEstelamV1
       body:
         apiUsername: "om9p"
         apiPassword: "s-z!e*n#"
@@ -56,11 +56,11 @@ endpoints:
     response:
       status: 200
       map:
-        bookNo: "$.result.data.getEstelam3TResponse.return.estelam3TPersonInfoResult.bookNo"
-        result: "$.payload"
+       payload: "$.payload"
+       
     business_errors:       
       # message
-      - when: { path: "$.result.data.getEstelam3TResponse.return.message", equals: "err.record.not.found" }
+      - when: { path: "$.status", equals: "NOT_FOUND" }
         status: 404
         code: PERSON_NOT_FOUND
-        message: "{{ $.result.data.getEstelam3TResponse.return.message }}"
+        message: "{{ $.errors }}"

@@ -158,3 +158,29 @@ func TestParamTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestUpstreamHeaders(t *testing.T) {
+	doc := func(upstream string) string {
+		return "schema_version: 1\nservice: { name: svc }\nendpoints:\n  - name: e\n    method: POST\n    path: /x\n    upstream:\n" + upstream
+	}
+	base := "      base_url: http://u.invalid\n      path: /p\n"
+
+	cfg, err := loadYAML(t, doc(base+"      headers:\n        Accept: \"*/*\"\n        User-Agent: curl/8.12.1\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h := cfg.Endpoints[0].Upstream.Headers; h["Accept"] != "*/*" || h["User-Agent"] != "curl/8.12.1" {
+		t.Errorf("headers = %v", h)
+	}
+
+	for name, tc := range map[string]struct{ yaml, want string }{
+		"content type": {base + "      headers: { Content-Type: text/plain }\n", "cannot be overridden"},
+		"auth twice":   {base + "      headers: { Authorization: x }\n      auth: { type: basic }\n", "not both"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := loadYAML(t, doc(tc.yaml)); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}
