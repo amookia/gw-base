@@ -81,14 +81,29 @@ type Upstream struct {
 	Format     string            `yaml:"format"` // body encoding: json (default) | form (urlencoded) | multipart (form-data)
 	Auth       *Auth             `yaml:"auth"`
 	Headers    map[string]string `yaml:"headers"` // extra request headers; values may use {{env.NAME}}
+	Jwe        Jwe               `yaml:"jwe"`
 	Path       string            `yaml:"path"`
 	Body       map[string]any    `yaml:"body"` // nested objects/lists allowed; strings may contain {{param}} and {{env.NAME}}
+}
+
+// Jwe configures JSON Web Encryption for {{ jwe:param }} placeholders in
+// upstream.body. Exactly one of PublicKeyFile / PublicKeyEnv must be set when
+// any jwe: placeholder is used. Alg and Enc default to ECDH-ES+A256KW / A256GCM.
+type Jwe struct {
+	PublicKeyFile string `yaml:"public_key_file"` // path to PEM public key
+	PublicKeyEnv  string `yaml:"public_key_env"`  // env var holding PEM public key
+	Alg           string `yaml:"alg"`             // key management algorithm
+	Enc           string `yaml:"enc"`             // content encryption algorithm
 }
 
 type Auth struct {
 	Type     string `yaml:"type"` // basic
 	Username Secret `yaml:"username"`
 	Password Secret `yaml:"password"`
+
+	Script       string            `yaml:"script,omitempty"`
+	ScriptIsFile bool              `yaml:"script_is_file,omitempty"`
+	Cache        map[string]string `yaml:"cache,omitempty"`
 }
 
 type Secret struct {

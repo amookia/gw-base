@@ -131,6 +131,9 @@ func (e *Endpoint) normalize() error {
 	if e.Upstream.Timeout == 0 {
 		e.Upstream.Timeout = 10 * time.Second
 	}
+	if err := e.Upstream.Jwe.normalize(); err != nil {
+		return fmt.Errorf("upstream.jwe: %w", err)
+	}
 
 	if e.Response.Status == 0 {
 		e.Response.Status = http.StatusOK
@@ -234,4 +237,37 @@ func checkHeaders(u Upstream) error {
 		}
 	}
 	return nil
+}
+
+const (
+	defaultJweAlg = "ECDH-ES+A256KW"
+	defaultJweEnc = "A256GCM"
+)
+
+// normalize applies JWE defaults. An empty Jwe is left alone (no encryption).
+// When any field is set, PublicKeyFile and PublicKeyEnv are mutually exclusive
+// and at least one must be present.
+func (j *Jwe) normalize() error {
+	empty := j.PublicKeyFile == "" && j.PublicKeyEnv == "" && j.Alg == "" && j.Enc == ""
+	if empty {
+		return nil
+	}
+	if j.PublicKeyFile != "" && j.PublicKeyEnv != "" {
+		return errors.New("set only one of public_key_file or public_key_env")
+	}
+	if j.PublicKeyFile == "" && j.PublicKeyEnv == "" {
+		return errors.New("public_key_file or public_key_env is required")
+	}
+	if j.Alg == "" {
+		j.Alg = defaultJweAlg
+	}
+	if j.Enc == "" {
+		j.Enc = defaultJweEnc
+	}
+	return nil
+}
+
+// Configured reports whether JWE encryption is enabled for this upstream.
+func (j Jwe) Configured() bool {
+	return j.PublicKeyFile != "" || j.PublicKeyEnv != ""
 }

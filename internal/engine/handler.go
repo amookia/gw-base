@@ -16,6 +16,7 @@ import (
 
 	"gw-base/internal/config"
 	"gw-base/internal/upstream"
+	"gw-base/pkg/jwe"
 )
 
 const envPrefix = "env."
@@ -28,6 +29,7 @@ type handler struct {
 	maxBody    int64
 	bodyParams bool
 	clock      builtins
+	encrypter  *jwe.Encrypter // nil when upstream.jwe is not configured
 }
 
 func newHandler(ep config.Endpoint, maxBody int64, clock builtins, logger *slog.Logger) (*handler, error) {
@@ -42,17 +44,58 @@ func newHandler(ep config.Endpoint, maxBody int64, clock builtins, logger *slog.
 		return nil, err
 	}
 	ep.Upstream.Headers = headers
+
+	var encrypter *jwe.Encrypter
+	if ep.Upstream.Jwe.Configured() {
+		pem, err := ep.Upstream.Jwe.LoadPublicKeyPEM()
+		if err != nil {
+			return nil, fmt.Errorf("upstream.jwe: %w", err)
+		}
+		encrypter, err = jwe.NewEncrypter(pem, ep.Upstream.Jwe.Alg, ep.Upstream.Jwe.Enc)
+		if err != nil {
+			return nil, fmt.Errorf("upstream.jwe: %w", err)
+		}
+	} else if usesJWE(ep) {
+		return nil, errors.New("upstream.body uses {{ jwe:... }} but upstream.jwe is not configured")
+	}
+
 	up, err := upstream.New(ep.Method, ep.Upstream, logger)
 	if err != nil {
 		return nil, err
 	}
-	h := &handler{ep: ep, up: up, log: logger.With("endpoint", ep.Name), maxBody: maxBody, clock: clock}
+	h := &handler{
+		ep:        ep,
+		up:        up,
+		log:       logger.With("endpoint", ep.Name),
+		maxBody:   maxBody,
+		clock:     clock,
+		encrypter: encrypter,
+	}
 	for _, p := range ep.Params {
 		if p.In == "body" {
 			h.bodyParams = true
 		}
 	}
 	return h, nil
+}
+
+// usesJWE reports whether any upstream.body template contains a jwe: placeholder.
+func usesJWE(ep config.Endpoint) bool {
+	for _, v := range ep.Upstream.Body {
+		found := false
+		_, _ = mapStrings(v, func(s string) (string, error) {
+			for _, key := range placeholders(s) {
+				if strings.HasPrefix(key, jwePrefix) {
+					found = true
+				}
+			}
+			return s, nil
+		})
+		if found {
+			return true
+		}
+	}
+	return false
 }
 
 // checkTemplates fails at startup on {{typos}} instead of at request time.
@@ -62,6 +105,16 @@ func checkTemplates(ep config.Endpoint) error {
 		declared[p.Name] = true
 	}
 	for field, v := range ep.Upstream.Body {
+		// Typed field form: { $param: name, $type: integer, $sub: 1 }
+		if m, ok := v.(map[string]any); ok {
+			if pname, has := m["$param"]; has {
+				name, _ := pname.(string)
+				if name == "" || !declared[name] {
+					return fmt.Errorf("upstream.body.%s: unknown $param %q", field, name)
+				}
+				continue
+			}
+		}
 		_, err := mapStrings(v, func(s string) (string, error) {
 			for _, key := range placeholders(s) {
 				if name, ok := strings.CutPrefix(key, envPrefix); ok {
@@ -71,6 +124,12 @@ func checkTemplates(ep config.Endpoint) error {
 				} else if isBuiltin(key) {
 					if err := validateBuiltin(key); err != nil {
 						return "", err
+					}
+					// jwe:paramName must refer to a declared param
+					if param, ok := jweParamName(key); ok {
+						if !declared[param] {
+							return "", fmt.Errorf("unknown param %q in jwe: placeholder", param)
+						}
 					}
 				} else if !declared[key] {
 					return "", fmt.Errorf("unknown param %q", key)
@@ -223,9 +282,23 @@ func (h *handler) buildFields(params map[string]string) (map[string]any, error) 
 		return nil, nil
 	}
 	at := h.clock.now() // one instant per request, so now: and millis: always agree
+	var jweErr error
 	lookup := func(key string) (string, bool) {
 		if name, ok := strings.CutPrefix(key, envPrefix); ok {
 			return os.LookupEnv(name)
+		}
+		if param, ok := jweParamName(key); ok {
+			if h.encrypter == nil {
+				jweErr = fmt.Errorf("jwe not configured")
+				return "", false
+			}
+			plain := params[param] // missing optional param → encrypt empty string
+			token, err := h.encrypter.EncryptData(plain)
+			if err != nil {
+				jweErr = fmt.Errorf("encrypting %s: %w", param, err)
+				return "", false
+			}
+			return token, true
 		}
 		if isBuiltin(key) {
 			return h.clock.resolve(key, at)
@@ -235,7 +308,13 @@ func (h *handler) buildFields(params map[string]string) (map[string]any, error) 
 
 	fields := make(map[string]any, len(h.ep.Upstream.Body))
 	for name, tpl := range h.ep.Upstream.Body {
-		v, err := mapStrings(tpl, func(s string) (string, error) { return render(s, lookup) })
+		v, err := mapStrings(tpl, func(s string) (string, error) {
+			out, err := render(s, lookup)
+			if err != nil && jweErr != nil {
+				return "", jweErr
+			}
+			return out, err
+		})
 		if err != nil {
 			return nil, fmt.Errorf("upstream.body.%s: %w", name, err)
 		}
@@ -243,6 +322,62 @@ func (h *handler) buildFields(params map[string]string) (map[string]any, error) 
 	}
 	return fields, nil
 }
+
+// resolveTypedField builds a JSON-native value from:
+//
+//	{ $param: name, $type: integer|number|string, $sub: N }
+//
+// $sub is only valid with $type integer and subtracts N from the param value
+//func resolveTypedField(m map[string]any, params map[string]string) (any, error) {
+//	paramName, _ := m["$param"].(string)
+//	if paramName == "" {
+//		return nil, fmt.Errorf("$param is required")
+//	}
+//	raw := params[paramName]
+//	typ, _ := m["$type"].(string)
+//	if typ == "" {
+//		typ = "string"
+//	}
+//
+//	var sub int64
+//	if s, ok := m["$sub"]; ok {
+//		switch t := s.(type) {
+//		case int:
+//			sub = int64(t)
+//		case int64:
+//			sub = t
+//		case float64:
+//			sub = int64(t)
+//		default:
+//			return nil, fmt.Errorf("$sub must be an integer")
+//		}
+//	}
+//
+//	switch typ {
+//	case "string":
+//		return raw, nil
+//	case "integer":
+//		if raw == "" {
+//			return nil, nil
+//		}
+//		n, err := strconv.ParseInt(raw, 10, 64)
+//		if err != nil {
+//			return nil, fmt.Errorf("param %q is not an integer", paramName)
+//		}
+//		return n - sub, nil
+//	case "number":
+//		if raw == "" {
+//			return nil, nil
+//		}
+//		f, err := strconv.ParseFloat(raw, 64)
+//		if err != nil {
+//			return nil, fmt.Errorf("param %q is not a number", paramName)
+//		}
+//		return f - float64(sub), nil
+//	default:
+//		return nil, fmt.Errorf("unsupported $type %q", typ)
+//	}
+//}
 
 // matchBusinessError returns the first business error whose condition holds.
 func (h *handler) matchBusinessError(ans answer) *config.BusinessError {

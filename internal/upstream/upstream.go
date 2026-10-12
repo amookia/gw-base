@@ -62,7 +62,7 @@ func (u *Upstream) Call(ctx context.Context, fields map[string]any) ([]byte, int
 	//req.Header.Set("Accept", "application/json") // default; upstream.headers may override it
 	req.Header.Set("Accept", "*/*")
 	for name, value := range u.header {
-		req.Header.Set(name, value)
+		req.Header[name] = []string{value}
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)

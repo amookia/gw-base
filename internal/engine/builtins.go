@@ -13,6 +13,7 @@ import (
 const (
 	nowPrefix       = "now:"
 	millisPrefix    = "millis:"
+	jwePrefix       = "jwe:"
 	maxMillisDigits = 13 // a Unix time in milliseconds has 13 digits
 )
 
@@ -20,6 +21,7 @@ const (
 //
 //	{{ now:yyyyMMddHHmmss }}   the current time, in the server's local timezone
 //	{{ millis:6 }}             the last 6 digits of the Unix time in milliseconds
+//	{{ jwe:paramName }}        the named param value, JWE-encrypted (handled in buildFields)
 //
 // Layout tokens: yyyy MM dd HH mm ss.
 type builtins struct {
@@ -31,10 +33,21 @@ func newBuiltins() builtins {
 }
 
 func isBuiltin(key string) bool {
-	return strings.HasPrefix(key, nowPrefix) || strings.HasPrefix(key, millisPrefix)
+	return strings.HasPrefix(key, nowPrefix) || strings.HasPrefix(key, millisPrefix) || strings.HasPrefix(key, jwePrefix)
+}
+
+// jweParamName extracts the param name from a "jwe:name" key.
+func jweParamName(key string) (string, bool) {
+	name, ok := strings.CutPrefix(key, jwePrefix)
+	if !ok || name == "" {
+		return "", false
+	}
+	return name, true
 }
 
 // validateBuiltin checks a built-in key at startup, so typos never reach a request.
+// For jwe: keys only the syntax is checked here; the param name is validated by
+// checkTemplates against the declared params list.
 func validateBuiltin(key string) error {
 	if layout, ok := strings.CutPrefix(key, nowPrefix); ok {
 		_, err := goLayout(layout)
@@ -44,11 +57,19 @@ func validateBuiltin(key string) error {
 		_, err := millisDigits(digits)
 		return err
 	}
+	if name, ok := strings.CutPrefix(key, jwePrefix); ok {
+		if name == "" {
+			return errors.New("jwe: needs a param name, e.g. jwe:mobileNumber")
+		}
+		return nil
+	}
 	return fmt.Errorf("unknown built-in %q", key)
 }
 
 // resolve renders a built-in for the instant at. One instant per request keeps
 // every built-in in a single template consistent with the others.
+// jwe: keys are not resolved here — buildFields encrypts them with the
+// endpoint's Encrypter and the request params.
 func (b builtins) resolve(key string, at time.Time) (string, bool) {
 	if layout, ok := strings.CutPrefix(key, nowPrefix); ok {
 		goFmt, err := goLayout(layout)

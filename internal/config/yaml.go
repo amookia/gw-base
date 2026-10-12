@@ -21,6 +21,25 @@ func (s Secret) Resolve() (string, error) {
 	}
 }
 
+// LoadPublicKeyPEM returns the PEM-encoded public key from file or env.
+func (j Jwe) LoadPublicKeyPEM() ([]byte, error) {
+	if j.PublicKeyFile != "" {
+		b, err := os.ReadFile(j.PublicKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("reading public_key_file %q: %w", j.PublicKeyFile, err)
+		}
+		return b, nil
+	}
+	if j.PublicKeyEnv != "" {
+		v, ok := os.LookupEnv(j.PublicKeyEnv)
+		if !ok || v == "" {
+			return nil, fmt.Errorf("env var %q is not set", j.PublicKeyEnv)
+		}
+		return []byte(v), nil
+	}
+	return nil, fmt.Errorf("no public key configured")
+}
+
 func (f *FieldMapping) UnmarshalYAML(n *yaml.Node) error {
 	switch n.Kind {
 	case yaml.ScalarNode:
