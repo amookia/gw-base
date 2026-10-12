@@ -35,8 +35,9 @@ func New(cfg *config.Config, logger *slog.Logger) (*Engine, error) {
 	})
 	r.GET("/healthz", func(c *gin.Context) { succeed(c, http.StatusOK, gin.H{"status": "ok"}) })
 
+	clock := newBuiltins()
 	for _, ep := range cfg.Endpoints {
-		h, err := newHandler(ep, cfg.Server.MaxBodyBytes, logger)
+		h, err := newHandler(ep, cfg.Server.MaxBodyBytes, clock, logger)
 		if err != nil {
 			return nil, fmt.Errorf("endpoint %q: %w", ep.Name, err)
 		}

@@ -227,10 +227,10 @@ func checkHeaders(u Upstream) error {
 		switch http.CanonicalHeaderKey(name) {
 		case "Content-Type", "Content-Length":
 			return fmt.Errorf("%s is set from upstream.format and cannot be overridden", name)
-			//case "Authorization":
-			//	if u.Auth != nil {
-			//		return errors.New("use either upstream.auth or an Authorization header, not both")
-			//	}
+		case "Authorization":
+			if u.Auth != nil {
+				return errors.New("use either upstream.auth or an Authorization header, not both")
+			}
 		}
 	}
 	return nil

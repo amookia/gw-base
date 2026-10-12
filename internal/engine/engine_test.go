@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -161,7 +162,7 @@ func TestNestedBodyTemplates(t *testing.T) {
 	}
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	h, err := newHandler(ep, 1<<20, quiet)
+	h, err := newHandler(ep, 1<<20, newBuiltins(), quiet)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +177,7 @@ func TestNestedBodyTemplates(t *testing.T) {
 	}
 
 	ep.Upstream.Body = map[string]any{"a": []any{map[string]any{"b": "{{nope}}"}}}
-	if _, err := newHandler(ep, 1<<20, quiet); err == nil {
+	if _, err := newHandler(ep, 1<<20, newBuiltins(), quiet); err == nil {
 		t.Error("unknown param inside a nested body should fail at startup")
 	}
 }
@@ -407,5 +408,55 @@ func TestResolveHeaders(t *testing.T) {
 	}
 	if _, err := resolveHeaders(map[string]string{"X": "{{param}}"}); err == nil {
 		t.Error("only {{env.NAME}} is allowed in headers")
+	}
+}
+
+func TestTimeBuiltins(t *testing.T) {
+	// built from time.Local, so the expected text holds on any machine
+	instant := time.Date(2026, 10, 12, 9, 58, 0, 90_000_000, time.Local)
+	ep := config.Endpoint{
+		Name:   "ids",
+		Method: http.MethodPost,
+		Upstream: config.Upstream{
+			BaseURL: "http://upstream.invalid", Path: "/p", Format: "json", Timeout: time.Second,
+			Body: map[string]any{"requestId": "0632{{ now:yyyyMMddHHmmss }}{{ millis:6 }}", "day": "{{now:yyyy-MM-dd}}"},
+		},
+	}
+
+	clock := newBuiltins()
+	calls := 0
+	clock.now = func() time.Time { calls++; return instant }
+	h, err := newHandler(ep, 1<<20, clock, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields, err := h.buildFields(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantMillis := fmt.Sprintf("%06d", instant.UnixMilli()%1_000_000)
+	if fields["requestId"] != "0632"+"20261012095800"+wantMillis || fields["day"] != "2026-10-12" {
+		t.Errorf("fields = %v", fields)
+	}
+	if len(fields["requestId"].(string)) != len("0632")+14+6 {
+		t.Errorf("requestId %q has the wrong length", fields["requestId"])
+	}
+	if calls != 1 {
+		t.Errorf("clock read %d times for one request, want 1", calls)
+	}
+}
+
+func TestBuiltinTemplatesAreValidatedAtStartup(t *testing.T) {
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	for _, tpl := range []string{"{{ now: }}", "{{ now:yyyyMMddXX }}", "{{ millis:0 }}", "{{ millis:14 }}", "{{ millis:abc }}"} {
+		ep := config.Endpoint{
+			Name: "bad", Method: http.MethodPost,
+			Upstream: config.Upstream{BaseURL: "http://u.invalid", Path: "/p", Timeout: time.Second,
+				Body: map[string]any{"x": tpl}},
+		}
+		if _, err := newHandler(ep, 1<<20, newBuiltins(), quiet); err == nil {
+			t.Errorf("%s should fail at startup", tpl)
+		}
 	}
 }

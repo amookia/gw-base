@@ -27,9 +27,10 @@ type handler struct {
 	log        *slog.Logger
 	maxBody    int64
 	bodyParams bool
+	clock      builtins
 }
 
-func newHandler(ep config.Endpoint, maxBody int64, logger *slog.Logger) (*handler, error) {
+func newHandler(ep config.Endpoint, maxBody int64, clock builtins, logger *slog.Logger) (*handler, error) {
 	if err := checkTemplates(ep); err != nil {
 		return nil, err
 	}
@@ -45,7 +46,7 @@ func newHandler(ep config.Endpoint, maxBody int64, logger *slog.Logger) (*handle
 	if err != nil {
 		return nil, err
 	}
-	h := &handler{ep: ep, up: up, log: logger.With("endpoint", ep.Name), maxBody: maxBody}
+	h := &handler{ep: ep, up: up, log: logger.With("endpoint", ep.Name), maxBody: maxBody, clock: clock}
 	for _, p := range ep.Params {
 		if p.In == "body" {
 			h.bodyParams = true
@@ -66,6 +67,10 @@ func checkTemplates(ep config.Endpoint) error {
 				if name, ok := strings.CutPrefix(key, envPrefix); ok {
 					if _, set := os.LookupEnv(name); !set {
 						return "", fmt.Errorf("env var %q is not set", name)
+					}
+				} else if isBuiltin(key) {
+					if err := validateBuiltin(key); err != nil {
+						return "", err
 					}
 				} else if !declared[key] {
 					return "", fmt.Errorf("unknown param %q", key)
@@ -217,9 +222,13 @@ func (h *handler) buildFields(params map[string]string) (map[string]any, error) 
 	if len(h.ep.Upstream.Body) == 0 {
 		return nil, nil
 	}
+	at := h.clock.now() // one instant per request, so now: and millis: always agree
 	lookup := func(key string) (string, bool) {
 		if name, ok := strings.CutPrefix(key, envPrefix); ok {
 			return os.LookupEnv(name)
+		}
+		if isBuiltin(key) {
+			return h.clock.resolve(key, at)
 		}
 		return params[key], true // optional params that were not sent render empty
 	}
