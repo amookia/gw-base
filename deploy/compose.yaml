@@ -1,0 +1,37 @@
+
+services:
+  person-inquiry-astan:
+    image: person-inquiry-astan:1.0.0
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.service
+      args:
+        CONFIG_FILE: spec/person/astan/person-inquiry-v1-astan.yaml
+    restart: unless-stopped
+
+  person-image-astan:
+    image: person-image-astan:1.0.0
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.service
+      args:
+        CONFIG_FILE: spec/person/astan/person-image-v1-astan.yaml
+    restart: unless-stopped
+
+  legal-inquiry-astan:
+    image: legal-inquiry-astan:1.0.0
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.service
+      args:
+        CONFIG_FILE: spec/legal/astan/legal-inquiry-v1-astan.yaml
+    restart: unless-stopped
+
+  post-address-astan:
+    image: post-address-astan:1.0.0
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.service
+      args:
+        CONFIG_FILE: spec/post/astan/post-getAddressByPostCode-v1-astan.yaml
+    restart: unless-stopped

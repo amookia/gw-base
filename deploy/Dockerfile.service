@@ -1,0 +1,10 @@
+FROM gw-base:1.0.0
+
+WORKDIR /app
+
+ARG CONFIG_FILE
+
+COPY ${CONFIG_FILE} /app/config.yaml
+
+ENTRYPOINT ["gw-base"]
+CMD ["-config", "/app/config.yaml"]
