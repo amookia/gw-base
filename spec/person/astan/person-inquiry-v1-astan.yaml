@@ -3,33 +3,46 @@ schema_version: 1
 service:
   name: person-inquiry-astan
   provider: astan
-  domain: inquiry-person
+  domain: test
+  version: 1.0.0                  # default: 0.1.0
 
 mode: pure
 
-upstream:
-  base_url: http://inquiryps.fam724.ir      # NOTE: plain HTTP, credentials cross the network unencrypted
-  base_url_env: INQUIRY_BASE_URL            # optional override (staging / local mock)
-  timeout: 10s
-  auth:
-    type: basic
-    username: { source: env, value: INQUIRY_USERNAME }
-    password: { source: env, value: INQUIRY_PASSWORD }
+server:                           # all optional
+  port: 8080                      # default: 8080 (env PORT overrides at runtime)
+  read_timeout: 10s               # default: 10s
+  write_timeout: 30s              # default: 30s (keep > upstream.timeout * (retries+1))
+  shutdown_timeout: 15s           # default: 15s
+  max_body_bytes: 1048576         # default: 1 MiB
+
 
 logging:
-  level: info                    # set to debug (or run with env LOG_LEVEL=debug) to log provider responses
-  debug_max_body_bytes: 2048     # truncate logged bodies (default 2048)
-  redact_fields: []   # JSON keys masked as "***" in debug logs (case-insensitive, any depth)
+  filePath: ./logs/
+  fileName: processor-app.log
+  encoding: json
+  level: info
+  console: true
+  rotating:
+    maxSize: 10       # Max size in MB before rotation
+    maxBackups: 5     # Number of old log files to keep
+    maxAge: 7         # Max age in days to retain old log files
+    compress: true    # Compress old log files
 
+########################################
 endpoints:
-  - name: get-estelam3
+  - name: get-person-inquiry
     method: POST
     path: /v1/astan/person/inquiry
     params:
       - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$' }
-      - { name: birthDate,    in: body, required: true, replace: [{ from: '/' }, { regex: '[-.]', to: '' }] }  # yyyymmdd, e.g. 13800415
+      - { name: birthDate,    in: body, required: true, pattern: '^[0-9]{8}$' }
     upstream:
       path: /astannix/GetEstelam3
+      base_url: http://inquiryps.fam724.ir
+      auth:
+        type: basic
+        username: { source: env, value: INQUIRY_USERNAME }
+        password: { source: env, value: INQUIRY_PASSWORD }
       body:
         arg0: "meas"
         arg1: "M!e@A-s*"
@@ -41,21 +54,20 @@ endpoints:
       status: 200
       map:
         bookNo: "$.result.data.getEstelam3Response.return.bookNo"
-        bookRow: "$.result.data.getEstelam3Response.return.bookRow"
+        bookRow: "$.result.data.getEstelam3Response.return.bookRow[0]"
         birthDate: "$.result.data.getEstelam3Response.return.birthDate"
         name: { $decode: base64, path: "$.result.data.getEstelam3Response.return.name" }
         family: { $decode: base64, path: "$.result.data.getEstelam3Response.return.family" }
-        fatherName: { $decode: base64, path: "$.result.data.getEstelam3Response.return.family" }
+        fatherName: { $decode: base64, path: "$.result.data.getEstelam3Response.return.fatherName" }
         gender: "$.result.data.getEstelam3Response.return.gender"
         officeName: { $decode: base64, path: "$.result.data.getEstelam3Response.return.officeName" }
         officeCode: "$.result.data.getEstelam3Response.return.officeCode"
         shenasnameNo: "$.result.data.getEstelam3Response.return.shenasnameNo"
         shenasnameSeri: { $decode: base64, path: "$.result.data.getEstelam3Response.return.shenasnameSeri" }
         shenasnameSerial: "$.result.data.getEstelam3Response.return.shenasnameSerial"
-        deathStatus: "$.result.data.getEstelam3Response.return.deathStatus"
+        deathStatus: "$.result.data.getEstelam3Response.return.deathStatus[0]"
 
-    business_errors:       
-      # message
+    business_errors:
       - when: { path: "$.result.data.getEstelam3Response.return.message", equals: "err.record.not.found" }
         status: 404
         code: PERSON_NOT_FOUND
