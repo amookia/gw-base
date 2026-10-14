@@ -112,8 +112,11 @@ func (e *Endpoint) normalize() error {
 		}
 	}
 
-	if _, err := e.Upstream.URL(); err != nil {
+	if _, err := e.Upstream.Base(); err != nil {
 		return err
+	}
+	if err := e.Upstream.normalizeMethod(); err != nil {
+		return fmt.Errorf("upstream.method: %w", err)
 	}
 	switch e.Upstream.Format {
 	case "":
@@ -171,8 +174,8 @@ func (be *BusinessError) normalize() error {
 	return nil
 }
 
-// URL returns the full upstream URL; base_url_env overrides base_url when set.
-func (u Upstream) URL() (string, error) {
+// Base returns the upstream base URL; base_url_env overrides base_url when set.
+func (u Upstream) Base() (string, error) {
 	base := u.BaseURL
 	if u.BaseURLEnv != "" {
 		if v := os.Getenv(u.BaseURLEnv); v != "" {
@@ -182,7 +185,24 @@ func (u Upstream) URL() (string, error) {
 	if base == "" {
 		return "", errors.New("upstream.base_url (or base_url_env) is required")
 	}
-	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(u.Path, "/"), nil
+	return strings.TrimRight(base, "/"), nil
+}
+
+// normalizeMethod defaults to POST, whatever method the client used on the gateway.
+func (u *Upstream) normalizeMethod() error {
+	if u.Method == "" {
+		u.Method = http.MethodPost
+	}
+	u.Method = strings.ToUpper(u.Method)
+	switch u.Method {
+	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+	default:
+		return fmt.Errorf("%q is not supported (use GET, POST, PUT, PATCH or DELETE)", u.Method)
+	}
+	if u.Method == http.MethodGet && len(u.Body) > 0 {
+		return errors.New("a GET request cannot carry a body; remove upstream.body or use another method")
+	}
+	return nil
 }
 
 // checkBody accepts strings, numbers, bools, null, lists and objects; form bodies must be flat.

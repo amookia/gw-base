@@ -30,9 +30,9 @@ logging:
 
 ########################################
 endpoints:
-  - name: person-relations
+  - name: person-inquiry-tracking
     method: POST
-    path: /v1/sitaad/person/inquiry    
+    path: /v1/sitaad/person/inquiry-with-tracking
     params:
       - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$' }
       - { name: birthDate,   in: body, required: true,  pattern: '^[0-9]{8}$' }   # e.g. 13800415

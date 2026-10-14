@@ -460,3 +460,108 @@ func TestBuiltinTemplatesAreValidatedAtStartup(t *testing.T) {
 		}
 	}
 }
+
+const pathYAML = `
+schema_version: 1
+service: { name: svc }
+endpoints:
+  - name: rel
+    method: POST
+    path: /v1/rel
+    params:
+      - { name: id,   in: body, required: true }
+      - { name: kind, in: body }
+    upstream:
+      base_url: UPSTREAM_URL
+      method: GET
+      path: /rel/{{id}}/{{ kind }}/{{env.GW_TEST_TENANT}}
+    response:
+      map: { ok: "$.ok" }
+  - name: plain
+    method: GET
+    path: /v1/plain
+    upstream:
+      base_url: UPSTREAM_URL
+      path: /plain
+    response:
+      map: { ok: "$.ok" }
+`
+
+func TestUpstreamPathParams(t *testing.T) {
+	t.Setenv("GW_TEST_TENANT", "t1")
+	var method, uri string
+	var bodyLen int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, uri = r.Method, r.RequestURI
+		b, _ := io.ReadAll(r.Body)
+		bodyLen = len(b)
+		_, _ = io.WriteString(w, `{"ok":true}`)
+	}))
+	defer srv.Close()
+
+	path := filepath.Join(t.TempDir(), "svc.yaml")
+	if err := os.WriteFile(path, []byte(strings.Replace(pathYAML, "UPSTREAM_URL", srv.URL, -1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eng, err := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := func(m, url, body string) *httptest.ResponseRecorder {
+		method, uri, bodyLen = "", "", 0
+		rec := httptest.NewRecorder()
+		eng.router.ServeHTTP(rec, httptest.NewRequest(m, url, strings.NewReader(body)))
+		return rec
+	}
+
+	for name, tc := range map[string]struct {
+		body       string
+		status     int
+		wantURI    string
+		wantInBody string
+	}{
+		"plain values":          {`{"id":"123","kind":"x"}`, 200, "/rel/123/x/t1", ""},
+		"slash and query chars": {`{"id":"a/b?x=1#f","kind":"x"}`, 200, "/rel/a%2Fb%3Fx=1%23f/x/t1", ""},
+		"spaces and unicode":    {`{"id":"a b","kind":"\u0633"}`, 200, "/rel/a%20b/%D8%B3/t1", ""},
+		"dot-dot is refused":    {`{"id":"..","kind":"x"}`, 400, "", "id has an invalid value"},
+		"single dot is refused": {`{"id":"1","kind":"."}`, 400, "", "kind has an invalid value"},
+		"missing path param":    {`{"id":"1"}`, 400, "", "kind is required"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := call(http.MethodPost, "/v1/rel", tc.body)
+			if rec.Code != tc.status || !strings.Contains(rec.Body.String(), tc.wantInBody) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+			if tc.status == 200 && (method != "GET" || uri != tc.wantURI || bodyLen != 0) {
+				t.Errorf("upstream saw %s %s (body %d bytes), want GET %s with no body", method, uri, bodyLen, tc.wantURI)
+			}
+			if tc.status == 400 && uri != "" {
+				t.Errorf("a refused request must not reach the upstream (saw %s)", uri)
+			}
+		})
+	}
+
+	// no upstream.method: POST, whatever the client used (here GET)
+	if rec := call(http.MethodGet, "/v1/plain", ""); rec.Code != 200 || method != "POST" || uri != "/plain" {
+		t.Errorf("got %d, upstream saw %s %s, want POST /plain", rec.Code, method, uri)
+	}
+}
+
+func TestUpstreamPathIsValidatedAtStartup(t *testing.T) {
+	t.Setenv("GW_TEST_TENANT", "t1")
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	for _, p := range []string{"/x/{{nope}}", "/x/{{env.GW_TEST_UNSET_VAR}}", "/x/{{ jwe:id }}", "/x/{{ now:bogus }}"} {
+		ep := config.Endpoint{
+			Name: "bad", Method: http.MethodPost,
+			Params:   []config.Param{{Name: "id", In: "body"}},
+			Upstream: config.Upstream{BaseURL: "http://u.invalid", Path: p, Timeout: time.Second},
+		}
+		if _, err := newHandler(ep, 1<<20, newBuiltins(), quiet); err == nil {
+			t.Errorf("path %q should fail at startup", p)
+		}
+	}
+}

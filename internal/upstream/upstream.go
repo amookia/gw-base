@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"gw-base/internal/config"
@@ -17,7 +18,8 @@ const maxResponseBytes = 10 << 20
 
 type Upstream struct {
 	method string
-	url    string
+	base   string // base URL without a trailing slash
+	logURL string // base + the configured path template: safe to log, holds no request values
 	format string // json | form | multipart
 	header map[string]string
 	auth   auth2.Authenticator
@@ -25,10 +27,14 @@ type Upstream struct {
 	client *http.Client
 }
 
-func New(method string, cfg config.Upstream, logger *slog.Logger) (*Upstream, error) {
-	target, err := cfg.URL()
+func New(cfg config.Upstream, logger *slog.Logger) (*Upstream, error) {
+	base, err := cfg.Base()
 	if err != nil {
 		return nil, err
+	}
+	method := cfg.Method
+	if method == "" {
+		method = http.MethodPost
 	}
 	auth, err := auth2.NewAuthenticator(cfg.Auth)
 	if err != nil {
@@ -36,7 +42,8 @@ func New(method string, cfg config.Upstream, logger *slog.Logger) (*Upstream, er
 	}
 	return &Upstream{
 		method: method,
-		url:    target,
+		base:   base,
+		logURL: joinURL(base, cfg.Path),
 		format: cfg.Format,
 		header: cfg.Headers,
 		auth:   auth,
@@ -49,13 +56,18 @@ func New(method string, cfg config.Upstream, logger *slog.Logger) (*Upstream, er
 	}, nil
 }
 
-// Call sends fields (may be empty) and returns the response body and status code.
-func (u *Upstream) Call(ctx context.Context, fields map[string]any) ([]byte, int, error) {
+func joinURL(base, path string) string {
+	return base + "/" + strings.TrimLeft(path, "/")
+}
+
+// Call sends fields (may be empty) to base + path and returns the response body
+// and status code. path is already rendered and escaped by the caller.
+func (u *Upstream) Call(ctx context.Context, path string, fields map[string]any) ([]byte, int, error) {
 	body, contentType, err := encode(u.format, fields)
 	if err != nil {
 		return nil, 0, fmt.Errorf("encoding body: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, u.method, u.url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, u.method, joinURL(u.base, path), bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, fmt.Errorf("building request: %w", err)
 	}
@@ -86,6 +98,6 @@ func (u *Upstream) Call(ctx context.Context, fields map[string]any) ([]byte, int
 	}
 
 	u.logger.Info("upstream call complete",
-		"method", u.method, "url", u.url, "status", resp.StatusCode, "duration_ms", time.Since(start).Milliseconds())
+		"method", u.method, "url", u.logURL, "status", resp.StatusCode, "duration_ms", time.Since(start).Milliseconds())
 	return data, resp.StatusCode, nil
 }

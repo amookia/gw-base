@@ -36,6 +36,11 @@ func isBuiltin(key string) bool {
 	return strings.HasPrefix(key, nowPrefix) || strings.HasPrefix(key, millisPrefix) || strings.HasPrefix(key, jwePrefix)
 }
 
+// isClockBuiltin reports whether key is a time value (now: or millis:).
+func isClockBuiltin(key string) bool {
+	return strings.HasPrefix(key, nowPrefix) || strings.HasPrefix(key, millisPrefix)
+}
+
 // jweParamName extracts the param name from a "jwe:name" key.
 func jweParamName(key string) (string, bool) {
 	name, ok := strings.CutPrefix(key, jwePrefix)

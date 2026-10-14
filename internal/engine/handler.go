@@ -33,6 +33,9 @@ type handler struct {
 }
 
 func newHandler(ep config.Endpoint, maxBody int64, clock builtins, logger *slog.Logger) (*handler, error) {
+	if err := checkPath(ep); err != nil {
+		return nil, err
+	}
 	if err := checkTemplates(ep); err != nil {
 		return nil, err
 	}
@@ -59,7 +62,7 @@ func newHandler(ep config.Endpoint, maxBody int64, clock builtins, logger *slog.
 		return nil, errors.New("upstream.body uses {{ jwe:... }} but upstream.jwe is not configured")
 	}
 
-	up, err := upstream.New(ep.Method, ep.Upstream, logger)
+	up, err := upstream.New(ep.Upstream, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -100,10 +103,7 @@ func usesJWE(ep config.Endpoint) bool {
 
 // checkTemplates fails at startup on {{typos}} instead of at request time.
 func checkTemplates(ep config.Endpoint) error {
-	declared := make(map[string]bool, len(ep.Params))
-	for _, p := range ep.Params {
-		declared[p.Name] = true
-	}
+	declared := declaredParams(ep)
 	for field, v := range ep.Upstream.Body {
 		// Typed field form: { $param: name, $type: integer, $sub: 1 }
 		if m, ok := v.(map[string]any); ok {
@@ -181,6 +181,18 @@ func (h *handler) serve(c *gin.Context) {
 		return
 	}
 
+	path, err := h.buildPath(params)
+	if err != nil {
+		var bad *valueError
+		if errors.As(err, &bad) {
+			fail(c, http.StatusBadRequest, "INVALID_REQUEST", bad.Error())
+			return
+		}
+		h.log.Error("building upstream path failed", "error", err)
+		fail(c, http.StatusInternalServerError, "INTERNAL_ERROR", "internal error")
+		return
+	}
+
 	fields, err := h.buildFields(params)
 	if err != nil {
 		h.log.Error("building upstream body failed", "error", err)
@@ -188,7 +200,7 @@ func (h *handler) serve(c *gin.Context) {
 		return
 	}
 
-	raw, status, err := h.up.Call(c.Request.Context(), fields)
+	raw, status, err := h.up.Call(c.Request.Context(), path, fields)
 	if err != nil {
 		h.log.Error("upstream call failed", "error", err)
 		fail(c, http.StatusBadGateway, "UPSTREAM_ERROR", "upstream call failed")

@@ -184,3 +184,35 @@ func TestUpstreamHeaders(t *testing.T) {
 		})
 	}
 }
+
+func TestUpstreamMethod(t *testing.T) {
+	doc := func(upstream string) string {
+		return "schema_version: 1\nservice: { name: svc }\nendpoints:\n  - name: e\n    method: GET\n    path: /x\n    upstream:\n      base_url: http://u.invalid\n      path: /p/{{id}}\n" + upstream
+	}
+
+	for yaml, want := range map[string]string{
+		"":                       "POST", // default, even though the client-facing method is GET
+		"      method: put\n":    "PUT",
+		"      method: DELETE\n": "DELETE",
+		"      method: GET\n":    "GET",
+	} {
+		cfg, err := loadYAML(t, doc(yaml))
+		if err != nil {
+			t.Fatalf("%q: %v", yaml, err)
+		}
+		if got := cfg.Endpoints[0].Upstream.Method; got != want {
+			t.Errorf("%q: method = %s, want %s", yaml, got, want)
+		}
+	}
+
+	for name, tc := range map[string]struct{ yaml, want string }{
+		"unsupported":   {"      method: TRACE\n", "not supported"},
+		"GET with body": {"      method: GET\n      body: { a: b }\n", "cannot carry a body"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := loadYAML(t, doc(tc.yaml)); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("err = %v, want it to contain %q", err, tc.want)
+			}
+		})
+	}
+}

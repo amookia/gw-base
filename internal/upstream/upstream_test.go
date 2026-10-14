@@ -54,13 +54,13 @@ func TestCallFormats(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			up, err := New(http.MethodPost, config.Upstream{
+			up, err := New(config.Upstream{
 				BaseURL: srv.URL, Path: "/x", Format: tc.format, Timeout: time.Second,
 			}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, _, err := up.Call(context.Background(), fields); err != nil {
+			if _, _, err := up.Call(context.Background(), "/x", fields); err != nil {
 				t.Fatal(err)
 			}
 
@@ -82,7 +82,7 @@ func TestCallNestedJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	up, err := New(http.MethodPost, config.Upstream{BaseURL: srv.URL, Path: "/x", Format: "json", Timeout: time.Second},
+	up, err := New(config.Upstream{BaseURL: srv.URL, Path: "/x", Format: "json", Timeout: time.Second},
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +92,7 @@ func TestCallNestedJSON(t *testing.T) {
 		"items": []any{map[string]any{"id": "1"}, map[string]any{"id": "2"}},
 		"limit": 5,
 	}
-	if _, _, err := up.Call(context.Background(), fields); err != nil {
+	if _, _, err := up.Call(context.Background(), "/x", fields); err != nil {
 		t.Fatal(err)
 	}
 	want := `{"items":[{"id":"1"},{"id":"2"}],"limit":5,"xx":{"x1":"x2"}}`
@@ -102,9 +102,9 @@ func TestCallNestedJSON(t *testing.T) {
 
 	// form-style bodies must stay flat
 	for _, format := range []string{"form", "multipart"} {
-		flat, _ := New(http.MethodPost, config.Upstream{BaseURL: srv.URL, Path: "/x", Format: format, Timeout: time.Second},
+		flat, _ := New(config.Upstream{BaseURL: srv.URL, Path: "/x", Format: format, Timeout: time.Second},
 			slog.New(slog.NewTextHandler(io.Discard, nil)))
-		if _, _, err := flat.Call(context.Background(), fields); err == nil {
+		if _, _, err := flat.Call(context.Background(), "/x", fields); err == nil {
 			t.Errorf("expected an error for a nested %s body", format)
 		}
 	}
@@ -124,7 +124,7 @@ func newLoggedUpstream(t *testing.T, level slog.Level) (*Upstream, *bytes.Buffer
 
 	var buf bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: level}))
-	up, err := New(http.MethodPost, config.Upstream{
+	up, err := New(config.Upstream{
 		BaseURL: srv.URL, Path: "/x", Timeout: time.Second,
 		Auth: &config.Auth{
 			Type:     "basic",
@@ -141,7 +141,7 @@ func newLoggedUpstream(t *testing.T, level slog.Level) (*Upstream, *bytes.Buffer
 func TestDebugLogsFullExchangeWithoutSecrets(t *testing.T) {
 	up, logs := newLoggedUpstream(t, slog.LevelDebug)
 
-	data, status, err := up.Call(context.Background(), map[string]any{"nin": "123"})
+	data, status, err := up.Call(context.Background(), "/x", map[string]any{"nin": "123"})
 	if err != nil || status != 200 || string(data) != `{"answer":42}` {
 		t.Fatalf("caller must still get the full answer: %q %d %v", data, status, err)
 	}
@@ -165,7 +165,7 @@ func TestDebugLogsFullExchangeWithoutSecrets(t *testing.T) {
 func TestInfoLevelLogsNoPayloads(t *testing.T) {
 	up, logs := newLoggedUpstream(t, slog.LevelInfo)
 
-	if _, _, err := up.Call(context.Background(), map[string]any{"nin": "123"}); err != nil {
+	if _, _, err := up.Call(context.Background(), "/x", map[string]any{"nin": "123"}); err != nil {
 		t.Fatal(err)
 	}
 	if out := logs.String(); strings.Contains(out, "upstream request") || strings.Contains(out, "nin") || strings.Contains(out, "answer") {
@@ -182,12 +182,12 @@ func TestHeaders(t *testing.T) {
 	defer srv.Close()
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
 	call := func(headers map[string]string) http.Header {
-		up, err := New(http.MethodPost, config.Upstream{BaseURL: srv.URL, Path: "/x", Format: "multipart",
+		up, err := New(config.Upstream{BaseURL: srv.URL, Path: "/x", Format: "multipart",
 			Timeout: time.Second, Headers: headers}, quiet)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err := up.Call(context.Background(), map[string]any{"a": "b"}); err != nil {
+		if _, _, err := up.Call(context.Background(), "/x", map[string]any{"a": "b"}); err != nil {
 			t.Fatal(err)
 		}
 		return got
@@ -203,5 +203,43 @@ func TestHeaders(t *testing.T) {
 	}
 	if !strings.HasPrefix(h.Get("Content-Type"), "multipart/form-data; boundary=") {
 		t.Errorf("Content-Type must come from the format, got %q", h.Get("Content-Type"))
+	}
+}
+
+func TestMethodDefaultsToPOSTAndPathIsAppended(t *testing.T) {
+	var gotMethod, gotURI string
+	var gotBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotURI = r.Method, r.RequestURI
+		gotBody, _ = io.ReadAll(r.Body)
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	defer srv.Close()
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	for name, tc := range map[string]struct {
+		method, base, path, wantMethod, wantURI string
+		fields                                  map[string]any
+		wantBody                                bool
+	}{
+		"default method":     {"", srv.URL, "/v1/p", "POST", "/v1/p", map[string]any{"a": "b"}, true},
+		"explicit PUT":       {"PUT", srv.URL, "/v1/p", "PUT", "/v1/p", map[string]any{"a": "b"}, true},
+		"GET has no body":    {"GET", srv.URL, "/v1/p/123", "GET", "/v1/p/123", nil, false},
+		"DELETE":             {"DELETE", srv.URL, "/v1/p/123", "DELETE", "/v1/p/123", nil, false},
+		"slashes are joined": {"GET", srv.URL + "/", "v1/p", "GET", "/v1/p", nil, false},
+		"escaping is kept":   {"GET", srv.URL, "/rel/a%2Fb%3Fx=1", "GET", "/rel/a%2Fb%3Fx=1", nil, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			up, err := New(config.Upstream{BaseURL: tc.base, Method: tc.method, Timeout: time.Second}, quiet)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := up.Call(context.Background(), tc.path, tc.fields); err != nil {
+				t.Fatal(err)
+			}
+			if gotMethod != tc.wantMethod || gotURI != tc.wantURI || (len(gotBody) > 0) != tc.wantBody {
+				t.Errorf("got %s %s body=%q, want %s %s (body %v)", gotMethod, gotURI, gotBody, tc.wantMethod, tc.wantURI, tc.wantBody)
+			}
+		})
 	}
 }
