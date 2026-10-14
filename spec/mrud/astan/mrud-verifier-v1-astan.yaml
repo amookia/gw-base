@@ -1,0 +1,69 @@
+schema_version: 1
+
+service:
+  name: mrud-verifier
+  provider: astan
+  domain: test
+  version: 1.0.0                  # default: 0.1.0
+
+mode: pure
+
+server:                           # all optional
+  port: 8080                      # default: 8080 (env PORT overrides at runtime)
+  read_timeout: 10s               # default: 10s
+  write_timeout: 30s              # default: 30s (keep > upstream.timeout * (retries+1))
+  shutdown_timeout: 15s           # default: 15s
+  max_body_bytes: 1048576         # default: 1 MiB
+
+
+logging:
+  filePath: ./logs/
+  fileName: processor-app.log
+  encoding: json
+  level: info
+  console: true
+  rotating:
+    maxSize: 10       # Max size in MB before rotation
+    maxBackups: 5     # Number of old log files to keep
+    maxAge: 7         # Max age in days to retain old log files
+    compress: true    # Compress old log files
+
+
+endpoints:
+  - name: general-isgs-info
+    method: POST
+    path: /v1/astan/mrud/verify
+    params:
+      - { name: nationalCode, in: body, required: true, pattern: '^[0-9]{10}$'}
+      - { name: postcode, in: body, required: true, pattern: '^[0-9]{10}$'}
+      - { name: isForeigner, in: body, required: true, type: boolean}
+     
+    upstream:
+    
+      headers:
+        X-API-KEY: 9kKy7Qu74PQukoaFKCuuiVL9Ph2cKnXvBfN7hAi6SnI=
+
+      timeout: 10s
+      auth:
+        type: basic
+        username: { source: env, value: INQUIRY_USERNAME }
+        password: { source: env, value: INQUIRY_PASSWORD }
+      base_url: http://inquiryps.fam724.ir
+      path: /astannix/AmlakSelfDeclarationPrimaryResidentVerify
+      body:
+        isForeigner: "{{ isForeigner }}"
+        postcode: "{{ postcode }}"
+        nationalCode: "{{ nationalCode }}"
+        
+
+    response:
+      status: 200
+      map:
+        data : "$.result.data"
+
+    business_errors:       
+      # message
+      - when: { path: "$.result.status.statusCode", equals: 400 }
+        status: 404
+        code: AMLAK_NOT_FOUND
+        message: "{{ $.result.data }}"
