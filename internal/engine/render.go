@@ -37,13 +37,18 @@ func render(tpl string, lookup func(key string) (string, bool)) (string, error) 
 
 // mapStrings returns a copy of v (scalar, list or object) with fn applied to every string in it.
 func mapStrings(v any, fn func(string) (string, error)) (any, error) {
+	return mapLeaves(v, func(s string) (any, error) { return fn(s) })
+}
+
+// mapLeaves is mapStrings where fn may turn a string into any JSON value.
+func mapLeaves(v any, fn func(string) (any, error)) (any, error) {
 	switch t := v.(type) {
 	case string:
 		return fn(t)
 	case []any:
 		out := make([]any, len(t))
 		for i, e := range t {
-			r, err := mapStrings(e, fn)
+			r, err := mapLeaves(e, fn)
 			if err != nil {
 				return nil, err
 			}
@@ -53,7 +58,7 @@ func mapStrings(v any, fn func(string) (string, error)) (any, error) {
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, e := range t {
-			r, err := mapStrings(e, fn)
+			r, err := mapLeaves(e, fn)
 			if err != nil {
 				return nil, err
 			}

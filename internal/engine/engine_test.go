@@ -343,9 +343,9 @@ endpoints:
 `
 
 func TestTypedParams(t *testing.T) {
-	var seen map[string]string
+	var seen map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		seen = map[string]string{}
+		seen = map[string]any{}
 		_ = json.NewDecoder(r.Body).Decode(&seen)
 		_, _ = io.WriteString(w, `{"id":"1"}`)
 	}))
@@ -392,8 +392,9 @@ func TestTypedParams(t *testing.T) {
 	// the valid case, again, to look at what the upstream received
 	rec := httptest.NewRecorder()
 	eng.router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/typed?score=1.5", strings.NewReader(`{"id":"7","ok":false,"age":30}`)))
-	if seen["ok"] != "false" || seen["age"] != "30" || seen["score"] != "1.5" || seen["id"] != "7" {
-		t.Errorf("upstream saw %v", seen)
+	// typed params reach the upstream as JSON booleans and numbers, not strings
+	if seen["ok"] != false || seen["age"] != float64(30) || seen["score"] != 1.5 || seen["id"] != "7" {
+		t.Errorf("upstream saw %#v", seen)
 	}
 }
 
@@ -563,5 +564,47 @@ func TestUpstreamPathIsValidatedAtStartup(t *testing.T) {
 		if _, err := newHandler(ep, 1<<20, newBuiltins(), quiet); err == nil {
 			t.Errorf("path %q should fail at startup", p)
 		}
+	}
+}
+
+func TestTypedParamsKeepTheirTypeInTheBody(t *testing.T) {
+	ep := config.Endpoint{
+		Name:   "types",
+		Method: http.MethodPost,
+		Params: []config.Param{
+			{Name: "flag", In: "body", Type: config.TypeBoolean},
+			{Name: "age", In: "body", Type: config.TypeInteger},
+			{Name: "score", In: "body", Type: config.TypeNumber},
+			{Name: "name", In: "body", Type: config.TypeString},
+			{Name: "missing", In: "body", Type: config.TypeBoolean},
+		},
+		Upstream: config.Upstream{
+			BaseURL: "http://upstream.invalid", Path: "/p", Format: "json", Timeout: time.Second,
+			Body: map[string]any{
+				"flag":    "{{flag}}",
+				"age":     "{{age}}",
+				"score":   "{{ score }}",
+				"name":    "{{name}}",
+				"missing": "{{missing}}",
+				"mixed":   "id-{{age}}",
+				"nested":  map[string]any{"ok": "{{flag}}"},
+				"list":    []any{"{{flag}}", "{{age}}", "literal"},
+			},
+		},
+	}
+	h, err := newHandler(ep, 1<<20, newBuiltins(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields, err := h.buildFields(map[string]string{"flag": "false", "age": "30", "score": "1.50", "name": "007"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := json.Marshal(fields)
+	want := `{"age":30,"flag":false,"list":[false,30,"literal"],"missing":null,"mixed":"id-30",` +
+		`"name":"007","nested":{"ok":false},"score":1.50}`
+	if string(got) != want {
+		t.Errorf("body = %s\nwant   %s", got, want)
 	}
 }

@@ -30,6 +30,7 @@ type handler struct {
 	bodyParams bool
 	clock      builtins
 	encrypter  *jwe.Encrypter // nil when upstream.jwe is not configured
+	paramTypes map[string]string
 }
 
 func newHandler(ep config.Endpoint, maxBody int64, clock builtins, logger *slog.Logger) (*handler, error) {
@@ -74,7 +75,9 @@ func newHandler(ep config.Endpoint, maxBody int64, clock builtins, logger *slog.
 		clock:     clock,
 		encrypter: encrypter,
 	}
+	h.paramTypes = make(map[string]string, len(ep.Params))
 	for _, p := range ep.Params {
+		h.paramTypes[p.Name] = p.Type
 		if p.In == "body" {
 			h.bodyParams = true
 		}
@@ -318,15 +321,24 @@ func (h *handler) buildFields(params map[string]string) (map[string]any, error) 
 		return params[key], true // optional params that were not sent render empty
 	}
 
+	// A value that is exactly one {{param}} keeps the param's declared type
+	// (boolean, integer, number); anything else renders as text.
+	leaf := func(s string) (any, error) {
+		if key, ok := wholePlaceholder(s); ok {
+			if typ := h.paramTypes[key]; typ != "" && typ != config.TypeString {
+				return typedValue(typ, params[key])
+			}
+		}
+		out, err := render(s, lookup)
+		if err != nil && jweErr != nil {
+			return nil, jweErr
+		}
+		return out, err
+	}
+
 	fields := make(map[string]any, len(h.ep.Upstream.Body))
 	for name, tpl := range h.ep.Upstream.Body {
-		v, err := mapStrings(tpl, func(s string) (string, error) {
-			out, err := render(s, lookup)
-			if err != nil && jweErr != nil {
-				return "", jweErr
-			}
-			return out, err
-		})
+		v, err := mapLeaves(tpl, leaf)
 		if err != nil {
 			return nil, fmt.Errorf("upstream.body.%s: %w", name, err)
 		}
