@@ -1,0 +1,79 @@
+schema_version: 1
+
+service:
+  name: get-natural-person-image
+  provider: fida
+  domain: test
+  version: 1.0.0  
+
+mode: pure
+
+
+
+server:                           # all optional
+  port: 8080                      # default: 8080 (env PORT overrides at runtime)
+  read_timeout: 10s               # default: 10s
+  write_timeout: 30s              # default: 30s (keep > upstream.timeout * (retries+1))
+  shutdown_timeout: 15s           # default: 15s
+  max_body_bytes: 1048576         # default: 1 MiB
+
+
+logging:
+  filePath: ./logs/
+  fileName: processor-app.log
+  encoding: json
+  level: info
+  console: true
+  rotating:
+    maxSize: 10       # Max size in MB before rotation
+    maxBackups: 5     # Number of old log files to keep
+    maxAge: 7         # Max age in days to retain old log files
+    compress: true    # Compress old log files
+
+endpoints:
+  - name: get-natural-person
+    method: Post
+    path: /v1/astan/fida/get-natural-person
+    params:
+      - { name: id, in: body, required: true, pattern: '^[0-9]{12}$'}
+
+
+    upstream:
+      base_url: http://inquiryps.fam724.ir
+      method: GET
+      path: /foreigners/api/ForeignPartyQuery/GetNaturalPerson?id={{ id }}
+
+      # query:
+      #   id: "{{id}}"  # params for get api
+      headers:
+        Authorization: "bearer _2UZyj1J_d6hcXx_lZoTqRVmoH8qbAaOn5Y_5wUcHDOelwn5OKBc0dFDDLasDlvD0p-7Ytt3uxakZ-oRZxvaQuNaOc7ZcKPIVBr1gmYnWlolabcdt5WqrST1I6laiiBMTPORoT9yH9LSM-BTMXre10muUhkMiqXpI0-AGxPCq7wIOjY5pHbB9bu__80_e9LodmMQPJR99sS5iIPX-65msygkO-1Xx_wVWYMG4WH5vxIMs9ISZOqmuwnCKwJW7Uu8ccF_L9sRN920zqWEFZ0w-RT6F5bDS0d1qo2sXF6nyLQ1TgT4tUkOE5Gl-nMV-obfPuJXUHT4pv9XB1k_RLYdwWHGrSJLRVOlnUT-2AqAE1XpdlOEjPEmHoImx3HcdsO7pYan7xzOV399EV8Hc81pkg"
+
+    response:
+      status: 200
+      map:
+        PersianFirstName: "$.PersianFirstName"
+        PersianLastName: "$.PersianLastName"
+        Gender: "$.Gender"
+        AncestorName: "$.AncestorName"
+        BirthDate: "$.BirthDate"
+        BirthPlaceCountryId: "$.BirthPlaceCountry.Id"
+        BirthPlaceCountryTitle: "$.BirthPlaceCountry.Title"
+        IdentificationDocument: "$.IdentificationDocument"
+        LatinFatherName: "$.LatinFatherName"
+        LatinLastName: "$.LatinLastName"
+
+    business_errors:
+      - when: { path: "@status", equals: 401 }
+        status: 502
+        code: UPSTREAM_UNAUTHORIZED
+        message: "provider rejected the credentials"
+
+      - when: { path: "@status", equals: 403 }
+        status: 502
+        code: UPSTREAM_FORBIDDEN
+        message: "provider refused the request"
+
+      - when: { path: "@status", equals: 429 }
+        status: 502
+        code: UPSTREAM_TOO_MANY_REQUEST
+        message: "provider refused the request"
