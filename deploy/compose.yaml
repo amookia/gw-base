@@ -35,3 +35,12 @@ services:
       args:
         CONFIG_FILE: spec/post/astan/post-getAddressByPostCode-v1-astan.yaml
     restart: unless-stopped
+
+  shahkar-astan:
+    image: shahkar-astan:1.0.0-dev
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.service
+      args:
+        CONFIG_FILE: spec/regulatory/astan/shahkar-astan.yaml
+
